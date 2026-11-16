@@ -1,26 +1,159 @@
 @import "tailwindcss";
 
+/* Dark mode por classe (controlado pelo next-themes) */
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   Tokens de cor (HSL em valores separados → permite hsl(var / alpha))
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.625rem;
+
+  /* Light (padrão quando .dark ausente) */
+  --background: 150 25% 98%;
+  --foreground: 200 25% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 200 25% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 200 25% 10%;
+  --primary: 142 70% 26%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 150 15% 94%;
+  --secondary-foreground: 200 25% 12%;
+  --muted: 150 12% 94%;
+  --muted-foreground: 200 10% 40%;
+  --accent: 190 85% 38%;
+  --accent-foreground: 0 0% 100%;
+  --cyan: 190 85% 38%;
+  --amber: 36 95% 42%;
+  --destructive: 0 72% 48%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 150 12% 88%;
+  --input: 150 12% 86%;
+  --ring: 142 70% 26%;
+
+  /* Glass */
+  --glass-bg: 0 0% 100%;
+  --glass-alpha: 0.72;
+  --glass-border: 150 15% 85%;
 }
 
+.dark {
+  --background: 200 24% 5%;
+  --foreground: 170 15% 92%;
+  --card: 200 22% 8%;
+  --card-foreground: 170 15% 92%;
+  --popover: 200 24% 7%;
+  --popover-foreground: 170 15% 92%;
+  --primary: 142 76% 58%;
+  --primary-foreground: 150 60% 6%;
+  --secondary: 200 18% 14%;
+  --secondary-foreground: 170 15% 92%;
+  --muted: 200 16% 13%;
+  --muted-foreground: 190 10% 58%;
+  --accent: 190 90% 55%;
+  --accent-foreground: 195 80% 8%;
+  --cyan: 190 90% 55%;
+  --amber: 38 92% 55%;
+  --destructive: 0 72% 55%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 200 15% 16%;
+  --input: 200 15% 17%;
+  --ring: 142 76% 58%;
+
+  /* Glass */
+  --glass-bg: 200 25% 10%;
+  --glass-alpha: 0.55;
+  --glass-border: 190 20% 30%;
+}
+
+/* ============================================================
+   Mapeamento para o Tailwind 4
+   ============================================================ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-cyan: hsl(var(--cyan));
+  --color-amber: hsl(var(--amber));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ============================================================
+   Base
+   ============================================================ */
+* {
+  border-color: hsl(var(--border));
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  min-height: 100dvh;
+  /* Fundo escuro profundo com gradiente radial sutil + textura de grid */
+  background-image:
+    radial-gradient(60% 55% at 12% 0%, hsl(var(--primary) / 0.10) 0%, transparent 60%),
+    radial-gradient(55% 50% at 95% 10%, hsl(var(--cyan) / 0.08) 0%, transparent 55%),
+    radial-gradient(70% 60% at 50% 100%, hsl(var(--primary) / 0.06) 0%, transparent 65%);
+  background-attachment: fixed;
+}
+
+/* Textura sutil de grid sobreposta ao fundo */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(to right, hsl(var(--border) / 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--border) / 0.35) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at 50% 30%, black 0%, transparent 85%);
+}
+
+/* Números tabulares em fonte mono */
+.font-mono,
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Cartão glass com blur */
+.glass {
+  background-color: hsl(var(--glass-bg) / var(--glass-alpha));
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid hsl(var(--glass-border) / 0.6);
+}
+
+/* Scrollbar discreta */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
 }
