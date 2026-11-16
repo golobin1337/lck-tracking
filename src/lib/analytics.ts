@@ -108,6 +108,85 @@ export async function getEventsPerDay(
   return Array.from(map, ([date, count]) => ({ date, count }))
 }
 
+// Receita e nº de compras pagas agrupadas por utm_campaign (chave minúscula).
+export async function getRevenueByCampaign(
+  supabase: SupabaseClient
+): Promise<Map<string, { revenue: number; count: number }>> {
+  const { data } = await supabase
+    .from('purchases')
+    .select('valor, utm_campaign')
+    .eq('status', 'paid')
+  const map = new Map<string, { revenue: number; count: number }>()
+  for (const row of data ?? []) {
+    const key = (row.utm_campaign ?? '').toLowerCase()
+    if (!key) continue
+    const cur = map.get(key) ?? { revenue: 0, count: 0 }
+    cur.revenue += Number(row.valor) || 0
+    cur.count += 1
+    map.set(key, cur)
+  }
+  return map
+}
+
+export type GeoBucket = { key: string; label: string; count: number }
+export type GeoBreakdown = {
+  countries: GeoBucket[]
+  states: GeoBucket[]
+  cities: GeoBucket[]
+  total: number
+  located: number
+}
+
+export async function getGeoBreakdown(
+  supabase: SupabaseClient
+): Promise<GeoBreakdown> {
+  const { data } = await supabase.from('visitors').select('geo')
+  const rows = data ?? []
+
+  const countries = new Map<string, number>()
+  const states = new Map<string, number>()
+  const cities = new Map<string, number>()
+  let located = 0
+
+  for (const r of rows) {
+    const geo = r.geo as {
+      country?: string | null
+      state?: string | null
+      city?: string | null
+    } | null
+    if (!geo) continue
+    let any = false
+    if (geo.country) {
+      countries.set(geo.country, (countries.get(geo.country) ?? 0) + 1)
+      any = true
+    }
+    if (geo.state) {
+      states.set(geo.state, (states.get(geo.state) ?? 0) + 1)
+      any = true
+    }
+    if (geo.city) {
+      cities.set(geo.city, (cities.get(geo.city) ?? 0) + 1)
+      any = true
+    }
+    if (any) located++
+  }
+
+  const toSorted = (m: Map<string, number>, labelFn?: (k: string) => string) =>
+    Array.from(m, ([key, count]) => ({
+      key,
+      label: labelFn ? labelFn(key) : key,
+      count,
+    })).sort((a, b) => b.count - a.count)
+
+  return {
+    countries: toSorted(countries),
+    states: toSorted(states),
+    cities: toSorted(cities),
+    total: rows.length,
+    located,
+  }
+}
+
 export type RevenueStats = {
   revenue: number
   paidCount: number

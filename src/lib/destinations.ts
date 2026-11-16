@@ -54,6 +54,39 @@ export async function getActivePixels(userId: string): Promise<ActivePixel[]> {
   return out
 }
 
+type ActiveAdAccount = {
+  id: string
+  label: string
+  ad_account_id: string
+  token: string
+}
+
+export async function getActiveAdAccounts(
+  userId: string
+): Promise<ActiveAdAccount[]> {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('meta_ad_accounts')
+    .select('id, label, ad_account_id, ads_token_enc')
+    .eq('user_id', userId)
+    .eq('active', true)
+  if (error || !data) return []
+
+  const out: ActiveAdAccount[] = []
+  for (const row of data) {
+    const token = await decrypt(admin, row.ads_token_enc)
+    if (token) {
+      out.push({
+        id: row.id,
+        label: row.label,
+        ad_account_id: row.ad_account_id,
+        token,
+      })
+    }
+  }
+  return out
+}
+
 export async function getActiveGa4Accounts(
   userId: string
 ): Promise<ActiveGa4[]> {
