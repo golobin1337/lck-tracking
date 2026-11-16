@@ -6,7 +6,7 @@ import {
 } from '@/lib/analytics'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
-import { Funnel } from '@/components/dashboard/funnel'
+import { FunnelChart } from '@/components/dashboard/funnel-chart'
 import { EventsChart } from '@/components/dashboard/events-chart'
 import {
   Card,
@@ -62,31 +62,27 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle className="text-base">Eventos por dia</CardTitle>
-            <CardDescription>Últimos 30 dias</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EventsChart data={perDay} />
-          </CardContent>
-        </Card>
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">Funil de conversão</CardTitle>
+          <CardDescription>
+            Visitantes → Visualizações → Checkout → Vendas
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FunnelChart stages={stats.funnel} />
+        </CardContent>
+      </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Funil</CardTitle>
-            <CardDescription>Visitou → Checkout → Compra</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Funnel
-              visited={stats.funnel.visited}
-              checkout={stats.funnel.checkout}
-              purchased={stats.funnel.purchased}
-            />
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle className="text-base">Eventos por dia</CardTitle>
+          <CardDescription>Últimos 30 dias</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <EventsChart data={perDay} />
+        </CardContent>
+      </Card>
     </>
   )
 }

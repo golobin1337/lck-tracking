@@ -2,13 +2,29 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Todas as consultas rodam via RLS (cliente autenticado do dono).
 
+export type FunnelStage = { label: string; value: number }
+
 export type OverviewStats = {
   uniqueVisitors: number
   totalEvents: number
   paidPurchases: number
   revenue: number
   conversionRate: number // 0..1
-  funnel: { visited: number; checkout: number; purchased: number }
+  funnel: FunnelStage[]
+}
+
+// Conta trck_user_id distintos que têm um dado evento.
+async function distinctTrckWithEvent(
+  supabase: SupabaseClient,
+  eventName: string
+): Promise<number> {
+  const { data } = await supabase
+    .from('events_log')
+    .select('trck_user_id')
+    .eq('event_name', eventName)
+  return new Set(
+    (data ?? []).map((e) => e.trck_user_id).filter((t): t is string => !!t)
+  ).size
 }
 
 export async function getOverviewStats(
@@ -36,16 +52,13 @@ export async function getOverviewStats(
     0
   )
 
-  // Funil: checkout = eventos InitiateCheckout (trck distintos).
-  const { data: checkoutEvents } = await supabase
-    .from('events_log')
-    .select('trck_user_id')
-    .eq('event_name', 'InitiateCheckout')
-  const checkout = new Set(
-    (checkoutEvents ?? [])
-      .map((e) => e.trck_user_id)
-      .filter((t): t is string => !!t)
-  ).size
+  // Funil de 5 etapas.
+  const [pageViews, checkout, totalPurchasesRes] = await Promise.all([
+    distinctTrckWithEvent(supabase, 'PageView'),
+    distinctTrckWithEvent(supabase, 'InitiateCheckout'),
+    supabase.from('purchases').select('*', { count: 'exact', head: true }),
+  ])
+  const salesInitiated = totalPurchasesRes.count ?? 0
 
   const conversionRate =
     uniqueVisitors > 0 ? paidPurchases / uniqueVisitors : 0
@@ -56,11 +69,13 @@ export async function getOverviewStats(
     paidPurchases,
     revenue,
     conversionRate,
-    funnel: {
-      visited: uniqueVisitors,
-      checkout,
-      purchased: paidPurchases,
-    },
+    funnel: [
+      { label: 'Visitantes', value: uniqueVisitors },
+      { label: 'Visualizações', value: pageViews },
+      { label: 'Checkout', value: checkout },
+      { label: 'Vendas inic.', value: salesInitiated },
+      { label: 'Vendas apr.', value: paidPurchases },
+    ],
   }
 }
 
