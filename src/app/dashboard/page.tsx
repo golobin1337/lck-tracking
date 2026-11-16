@@ -35,9 +35,7 @@ export default function DashboardPage() {
                 <Icon className={`size-4 ${s.accent}`} />
               </CardHeader>
               <CardContent>
-                <p className="font-mono text-3xl font-semibold tabular">
-                  {s.value}
-                </p>
+                <p className="text-3xl font-semibold tabular">{s.value}</p>
               </CardContent>
             </Card>
           )

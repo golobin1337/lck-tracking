@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
-import { Manrope, JetBrains_Mono } from 'next/font/google'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 
-const manrope = Manrope({
-  variable: '--font-manrope',
+const inter = Inter({
+  variable: '--font-inter',
   subsets: ['latin'],
   display: 'swap',
 })
@@ -25,7 +25,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
     <html
       lang="pt-BR"
       suppressHydrationWarning
-      className={`${manrope.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         <ThemeProvider

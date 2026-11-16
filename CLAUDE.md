@@ -23,6 +23,18 @@ exibe tudo num painel autenticado (visão geral, eventos, faturamento, campanhas
 - Turbopack é padrão; scripts não precisam de `--turbopack`.
 - Docs locais da versão instalada: `node_modules/next/dist/docs/`.
 
+## Design system
+
+- Tema **escuro padrão** + toggle claro (next-themes, estratégia de classe).
+- Tokens HSL em `src/app/globals.css` (`:root` claro, `.dark` escuro), mapeados
+  no `@theme`. Fundo **navy profundo** com gradiente radial sutil.
+- Primária **violeta/índigo** (`--primary`). Accents: `--success` (verde),
+  `--destructive` (vermelho), `--amber`, `--cyan`, `--violet` (magenta).
+- Fontes: **Inter** (texto e números, com `.tabular` → tabular-nums) e
+  **JetBrains Mono** (`--font-jetbrains`) só para JSON/código.
+- Cartões: `glass` (blur) ou sólidos (`bg-card` + `border`). Radius `0.75rem`.
+- Componentes em `src/components/ui` (estilo shadcn/Radix).
+
 ## Segurança (regras inegociáveis)
 
 - **RLS ligada em TODAS as tabelas.** Leitura: só o dono autenticado
