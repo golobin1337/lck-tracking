@@ -1,53 +1,92 @@
 import { Users, Activity, ShoppingCart, TrendingUp } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
+import {
+  getOverviewStats,
+  getEventsPerDay,
+} from '@/lib/analytics'
 import { PageHeader } from '@/components/dashboard/page-header'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { StatCard } from '@/components/dashboard/stat-card'
+import { Funnel } from '@/components/dashboard/funnel'
+import { EventsChart } from '@/components/dashboard/events-chart'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card'
+import { formatCurrency, formatNumber } from '@/lib/utils'
 
-const placeholderStats = [
-  { label: 'Usuários únicos', value: '—', icon: Users, accent: 'text-primary' },
-  { label: 'Eventos', value: '—', icon: Activity, accent: 'text-cyan' },
-  { label: 'Compras', value: '—', icon: ShoppingCart, accent: 'text-amber' },
-  {
-    label: 'Taxa de conversão',
-    value: '—',
-    icon: TrendingUp,
-    accent: 'text-primary',
-  },
-]
+export default async function DashboardPage() {
+  const supabase = await createClient()
+  const [stats, perDay] = await Promise.all([
+    getOverviewStats(supabase),
+    getEventsPerDay(supabase, 30),
+  ])
 
-export default function DashboardPage() {
+  const conversionPct = `${(stats.conversionRate * 100).toFixed(2)}%`
+
   return (
     <>
       <PageHeader
         title="Visão geral"
         description="Resumo de visitantes, eventos e conversões."
-      >
-        <Badge variant="info">Dados na Fase 5</Badge>
-      </PageHeader>
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {placeholderStats.map((s) => {
-          const Icon = s.icon
-          return (
-            <Card key={s.label}>
-              <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-                <span className="text-sm text-muted-foreground">{s.label}</span>
-                <Icon className={`size-4 ${s.accent}`} />
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold tabular">{s.value}</p>
-              </CardContent>
-            </Card>
-          )
-        })}
+        <StatCard
+          label="Usuários únicos"
+          value={formatNumber(stats.uniqueVisitors)}
+          icon={Users}
+          accent="text-primary"
+        />
+        <StatCard
+          label="Eventos"
+          value={formatNumber(stats.totalEvents)}
+          icon={Activity}
+          accent="text-cyan"
+        />
+        <StatCard
+          label="Compras"
+          value={formatNumber(stats.paidPurchases)}
+          icon={ShoppingCart}
+          accent="text-success"
+          hint={formatCurrency(stats.revenue)}
+        />
+        <StatCard
+          label="Taxa de conversão"
+          value={conversionPct}
+          icon={TrendingUp}
+          accent="text-amber"
+          hint="compras ÷ visitantes"
+        />
       </div>
 
-      <Card className="mt-6">
-        <CardContent className="py-10 text-center text-sm text-muted-foreground">
-          O funil (Visitou → Checkout → Compra) e os gráficos entram na Fase 5,
-          quando os endpoints de captura já estiverem gravando dados.
-        </CardContent>
-      </Card>
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <Card className="lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="text-base">Eventos por dia</CardTitle>
+            <CardDescription>Últimos 30 dias</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EventsChart data={perDay} />
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">Funil</CardTitle>
+            <CardDescription>Visitou → Checkout → Compra</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Funnel
+              visited={stats.funnel.visited}
+              checkout={stats.funnel.checkout}
+              purchased={stats.funnel.purchased}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </>
   )
 }
