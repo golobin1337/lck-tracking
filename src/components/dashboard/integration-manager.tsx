@@ -14,7 +14,18 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import type { TestResult } from '@/app/dashboard/configuracoes/actions'
+import {
+  savePixel,
+  deletePixel,
+  testPixel,
+  saveGa4,
+  deleteGa4,
+  testGa4,
+  saveAdAccount,
+  deleteAdAccount,
+  testAdAccount,
+  type TestResult,
+} from '@/app/dashboard/configuracoes/actions'
 
 export type IntegrationItem = {
   id: string
@@ -23,11 +34,13 @@ export type IntegrationItem = {
   hasSecret: boolean
 }
 
-type Actions = {
-  save: (formData: FormData) => Promise<void>
-  remove: (id: string) => Promise<void>
-  test: (id: string) => Promise<TestResult>
-}
+export type IntegrationKind = 'pixel' | 'ga4' | 'ad'
+
+const ACTIONS = {
+  pixel: { save: savePixel, remove: deletePixel, test: testPixel },
+  ga4: { save: saveGa4, remove: deleteGa4, test: testGa4 },
+  ad: { save: saveAdAccount, remove: deleteAdAccount, test: testAdAccount },
+} as const
 
 type Labels = {
   idLabel: string
@@ -41,14 +54,15 @@ export function IntegrationManager({
   description,
   items,
   labels,
-  actions,
+  kind,
 }: {
   title: string
   description: string
   items: IntegrationItem[]
   labels: Labels
-  actions: Actions
+  kind: IntegrationKind
 }) {
+  const actions = ACTIONS[kind]
   const router = useRouter()
   const [dialog, setDialog] = React.useState<
     { mode: 'add' } | { mode: 'edit'; item: IntegrationItem } | null

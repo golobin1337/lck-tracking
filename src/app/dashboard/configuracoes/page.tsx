@@ -6,17 +6,6 @@ import {
   IntegrationManager,
   type IntegrationItem,
 } from '@/components/dashboard/integration-manager'
-import {
-  savePixel,
-  deletePixel,
-  testPixel,
-  saveGa4,
-  deleteGa4,
-  testGa4,
-  saveAdAccount,
-  deleteAdAccount,
-  testAdAccount,
-} from './actions'
 
 export default async function ConfiguracoesPage() {
   const supabase = await createClient()
@@ -89,7 +78,7 @@ export default async function ConfiguracoesPage() {
                 secretLabel: 'Token CAPI',
                 secretPlaceholder: 'EAAB...',
               }}
-              actions={{ save: savePixel, remove: deletePixel, test: testPixel }}
+              kind="pixel"
             />
           </CardContent>
         </Card>
@@ -106,7 +95,7 @@ export default async function ConfiguracoesPage() {
                 secretLabel: 'API Secret',
                 secretPlaceholder: 'segredo da API',
               }}
-              actions={{ save: saveGa4, remove: deleteGa4, test: testGa4 }}
+              kind="ga4"
             />
           </CardContent>
         </Card>
@@ -123,11 +112,7 @@ export default async function ConfiguracoesPage() {
                 secretLabel: 'Token de Ads',
                 secretPlaceholder: 'EAAB...',
               }}
-              actions={{
-                save: saveAdAccount,
-                remove: deleteAdAccount,
-                test: testAdAccount,
-              }}
+              kind="ad"
             />
           </CardContent>
         </Card>
