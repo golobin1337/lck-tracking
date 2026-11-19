@@ -65,6 +65,19 @@ export async function saveSettings(formData: FormData): Promise<void> {
   revalidatePath(PATH)
 }
 
+// Credenciais do App do Facebook (para o OAuth "Conectar com Facebook").
+export async function saveMetaApp(formData: FormData): Promise<void> {
+  const userId = await requireUserId()
+  const admin = createAdminClient()
+  const appId = String(formData.get('fb_app_id') || '').trim()
+  const secret = String(formData.get('fb_app_secret') || '').trim()
+  const row: Record<string, unknown> = { user_id: userId }
+  if (appId) row.fb_app_id = appId
+  if (secret) row.fb_app_secret_enc = await encrypt(admin, secret)
+  await admin.from('settings').upsert(row, { onConflict: 'user_id' })
+  revalidatePath(PATH)
+}
+
 export async function generateWebhookToken(): Promise<string> {
   const userId = await requireUserId()
   const admin = createAdminClient()

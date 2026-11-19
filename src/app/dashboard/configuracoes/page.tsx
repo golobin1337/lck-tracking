@@ -1,8 +1,10 @@
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SettingsSection } from '@/components/dashboard/settings-section'
 import { InstallSnippet } from '@/components/dashboard/install-snippet'
+import { MetaConnect } from '@/components/dashboard/meta-connect'
 import {
   IntegrationManager,
   type IntegrationItem,
@@ -14,7 +16,9 @@ export default async function ConfiguracoesPage() {
   const [settingsRes, pixelsRes, ga4Res, adRes] = await Promise.all([
     supabase
       .from('settings')
-      .select('webhook_token, currency, test_event_code')
+      .select(
+        'webhook_token, currency, test_event_code, fb_app_id, fb_app_secret_enc'
+      )
       .maybeSingle(),
     supabase.from('meta_pixels').select('id, label, pixel_id, capi_token_enc'),
     supabase
@@ -107,6 +111,22 @@ export default async function ConfiguracoesPage() {
               }}
               kind="ga4"
             />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Conexão com o Meta (Login com Facebook)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Suspense fallback={null}>
+              <MetaConnect
+                fbAppId={settings?.fb_app_id ?? null}
+                hasSecret={!!settings?.fb_app_secret_enc}
+              />
+            </Suspense>
           </CardContent>
         </Card>
 
