@@ -42,6 +42,13 @@ const ACTIONS = {
   ad: { save: saveAdAccount, remove: deleteAdAccount, test: testAdAccount },
 } as const
 
+// Cor de accent por tipo, pra diferenciar visualmente cada seção.
+const KIND_ACCENT = {
+  pixel: { dot: 'bg-cyan', border: 'border-l-cyan' },
+  ga4: { dot: 'bg-amber', border: 'border-l-amber' },
+  ad: { dot: 'bg-violet', border: 'border-l-violet' },
+} as const
+
 type Labels = {
   idLabel: string
   idPlaceholder: string
@@ -63,6 +70,7 @@ export function IntegrationManager({
   kind: IntegrationKind
 }) {
   const actions = ACTIONS[kind]
+  const accent = KIND_ACCENT[kind]
   const router = useRouter()
   const [dialog, setDialog] = React.useState<
     { mode: 'add' } | { mode: 'edit'; item: IntegrationItem } | null
@@ -117,9 +125,15 @@ export function IntegrationManager({
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold">{title}</h3>
-          <p className="text-xs text-muted-foreground">{description}</p>
+        <div className="flex items-center gap-2.5">
+          <span
+            className={`size-2.5 shrink-0 rounded-full ${accent.dot}`}
+            aria-hidden
+          />
+          <div>
+            <h3 className="font-semibold">{title}</h3>
+            <p className="text-xs text-muted-foreground">{description}</p>
+          </div>
         </div>
         <Button size="sm" onClick={() => setDialog({ mode: 'add' })}>
           <Plus />
@@ -138,7 +152,7 @@ export function IntegrationManager({
             return (
               <div
                 key={item.id}
-                className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/40 p-3"
+                className={`flex flex-wrap items-center gap-3 rounded-lg border border-l-4 border-border ${accent.border} bg-card/40 p-3`}
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
