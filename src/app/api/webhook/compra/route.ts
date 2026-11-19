@@ -78,12 +78,19 @@ export async function POST(request: Request) {
 
   // ---- Vincular visitante / trck_user_id ----
   // 1) utm_content (convenção: trck_user_id na URL do checkout)
-  // 2) fallback por email_hash
-  // 3) fallback por phone_hash
+  // 2) fbp (cookie do Facebook — ponte confiável quando utm_content está ocupado)
+  // 3) fallback por email_hash
+  // 4) fallback por phone_hash
   const utmTrck = tracking?.utm_content?.trim() || null
+  const trackFbp = tracking?.fbp?.trim() || null
   let visitor: Visitor | null = null
-  let matchType: 'trck_user_id' | 'email' | 'phone' | 'utm_content' | 'none' =
-    'none'
+  let matchType:
+    | 'trck_user_id'
+    | 'fbp'
+    | 'email'
+    | 'phone'
+    | 'utm_content'
+    | 'none' = 'none'
 
   if (utmTrck) {
     const { data } = await admin
@@ -94,6 +101,19 @@ export async function POST(request: Request) {
     if (data) {
       visitor = data as Visitor
       matchType = 'trck_user_id'
+    }
+  }
+  if (!visitor && trackFbp) {
+    const { data } = await admin
+      .from('visitors')
+      .select('*')
+      .eq('fbp', trackFbp)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (data) {
+      visitor = data as Visitor
+      matchType = 'fbp'
     }
   }
   if (!visitor && emailHash) {
