@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Activity, Menu, X, LogOut, ChevronDown } from 'lucide-react'
 import { navItems } from './nav'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { PrizeBadge } from '@/components/dashboard/prize-badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { logout } from '@/app/dashboard/actions'
@@ -187,6 +188,8 @@ export function DashboardShell({
 
         <main className="flex-1 p-4 md:p-6">{children}</main>
       </div>
+
+      <PrizeBadge />
     </div>
   )
 }
