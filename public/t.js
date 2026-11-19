@@ -248,8 +248,25 @@
     })
   }
 
+  // Debounce: ignora o MESMO evento (nome + content_name + value) disparado de
+  // novo dentro da janela — evita recliques nervosos virarem eventos repetidos.
+  var DEBOUNCE_MS = 30000
+  var lastFired = {}
+
   function track(name, params) {
     params = params || {}
+    var key =
+      name +
+      '|' +
+      (params.content_name || '') +
+      '|' +
+      (params.value != null ? params.value : '')
+    var now = Date.now()
+    if (lastFired[key] && now - lastFired[key] < DEBOUNCE_MS) {
+      return null // reclique ignorado
+    }
+    lastFired[key] = now
+
     var eventId = uid()
     // Meta Pixel (navegador) com eventID → dedup com o CAPI
     try {
