@@ -1,6 +1,9 @@
+import 'server-only'
 import { createClient } from '@supabase/supabase-js'
 
 // Client com service_role — BYPASSA RLS. USAR SOMENTE NO SERVIDOR.
+// O import 'server-only' acima FALHA o build se este módulo for parar
+// num bundle de cliente — trava de segurança em tempo de compilação.
 // Nunca importar em Client Components nem expor a key no browser.
 // Usado pelos endpoints de captura/webhook para escrever nas tabelas.
 export function createAdminClient() {
