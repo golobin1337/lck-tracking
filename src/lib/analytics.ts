@@ -2,6 +2,21 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Todas as consultas rodam via RLS (cliente autenticado do dono).
 
+// Período de análise. from/to são instantes ISO (UTC). tz = offset em minutos
+// (Date.getTimezoneOffset do cliente) para agrupar por dia no fuso do usuário.
+export type DateRange = { from: string; to: string; tz?: number }
+
+// Aplica o filtro de created_at num query builder do Supabase (quando há range).
+interface Rangeable {
+  gte(c: string, v: string): Rangeable
+  lte(c: string, v: string): Rangeable
+}
+function inRange<T>(query: T, range?: DateRange, col = 'created_at'): T {
+  if (!range) return query
+  const q = query as unknown as Rangeable
+  return q.gte(col, range.from).lte(col, range.to) as unknown as T
+}
+
 export type FunnelStage = { label: string; value: number }
 
 export type OverviewStats = {
@@ -16,37 +31,48 @@ export type OverviewStats = {
 // Conta trck_user_id distintos que têm um dado evento.
 async function distinctTrckWithEvent(
   supabase: SupabaseClient,
-  eventName: string
+  eventName: string,
+  range?: DateRange
 ): Promise<number> {
-  const { data } = await supabase
-    .from('events_log')
-    .select('trck_user_id')
-    .eq('event_name', eventName)
+  const { data } = await inRange(
+    supabase.from('events_log').select('trck_user_id').eq('event_name', eventName),
+    range
+  )
   return new Set(
     (data ?? []).map((e) => e.trck_user_id).filter((t): t is string => !!t)
   ).size
 }
 
 export async function getOverviewStats(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  range?: DateRange
 ): Promise<OverviewStats> {
   const [visitorsRes, eventsRes, paidRes] = await Promise.all([
-    supabase.from('visitors').select('*', { count: 'exact', head: true }),
-    supabase.from('events_log').select('*', { count: 'exact', head: true }),
-    supabase
-      .from('purchases')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'paid'),
+    inRange(
+      supabase.from('visitors').select('*', { count: 'exact', head: true }),
+      range
+    ),
+    inRange(
+      supabase.from('events_log').select('*', { count: 'exact', head: true }),
+      range
+    ),
+    inRange(
+      supabase
+        .from('purchases')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'paid'),
+      range
+    ),
   ])
   const uniqueVisitors = visitorsRes.count ?? 0
   const totalEvents = eventsRes.count ?? 0
   const paidPurchases = paidRes.count ?? 0
 
   // Receita: soma de valor das compras pagas.
-  const { data: paidRows } = await supabase
-    .from('purchases')
-    .select('valor')
-    .eq('status', 'paid')
+  const { data: paidRows } = await inRange(
+    supabase.from('purchases').select('valor').eq('status', 'paid'),
+    range
+  )
   const revenue = (paidRows ?? []).reduce(
     (sum, r) => sum + (Number(r.valor) || 0),
     0
@@ -54,9 +80,12 @@ export async function getOverviewStats(
 
   // Funil de 5 etapas.
   const [pageViews, checkout, totalPurchasesRes] = await Promise.all([
-    distinctTrckWithEvent(supabase, 'PageView'),
-    distinctTrckWithEvent(supabase, 'InitiateCheckout'),
-    supabase.from('purchases').select('*', { count: 'exact', head: true }),
+    distinctTrckWithEvent(supabase, 'PageView', range),
+    distinctTrckWithEvent(supabase, 'InitiateCheckout', range),
+    inRange(
+      supabase.from('purchases').select('*', { count: 'exact', head: true }),
+      range
+    ),
   ])
   const salesInitiated = totalPurchasesRes.count ?? 0
 
@@ -83,26 +112,35 @@ export type DayCount = { date: string; count: number }
 
 export async function getEventsPerDay(
   supabase: SupabaseClient,
-  days = 30
+  range?: DateRange
 ): Promise<DayCount[]> {
-  const since = new Date()
-  since.setDate(since.getDate() - (days - 1))
-  since.setHours(0, 0, 0, 0)
+  const tz = range?.tz ?? 0
+  const now = new Date()
+  const fromIso =
+    range?.from ?? new Date(now.getTime() - 29 * 864e5).toISOString()
+  const toIso = range?.to ?? now.toISOString()
 
   const { data } = await supabase
     .from('events_log')
     .select('created_at')
-    .gte('created_at', since.toISOString())
+    .gte('created_at', fromIso)
+    .lte('created_at', toIso)
 
-  // Mapa data (YYYY-MM-DD) → contagem
+  // Chave de dia no fuso do usuário (YYYY-MM-DD).
+  const dayKey = (iso: string) =>
+    new Date(new Date(iso).getTime() - tz * 60000).toISOString().slice(0, 10)
+
   const map = new Map<string, number>()
-  for (let i = 0; i < days; i++) {
-    const d = new Date(since)
-    d.setDate(since.getDate() + i)
+  let d = new Date(dayKey(fromIso) + 'T00:00:00Z')
+  const end = new Date(dayKey(toIso) + 'T00:00:00Z')
+  let guard = 0
+  while (d <= end && guard < 400) {
     map.set(d.toISOString().slice(0, 10), 0)
+    d = new Date(d.getTime() + 864e5)
+    guard++
   }
   for (const row of data ?? []) {
-    const key = new Date(row.created_at).toISOString().slice(0, 10)
+    const key = dayKey(row.created_at)
     if (map.has(key)) map.set(key, (map.get(key) ?? 0) + 1)
   }
   return Array.from(map, ([date, count]) => ({ date, count }))
@@ -138,9 +176,10 @@ export type GeoBreakdown = {
 }
 
 export async function getGeoBreakdown(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  range?: DateRange
 ): Promise<GeoBreakdown> {
-  const { data } = await supabase.from('visitors').select('geo')
+  const { data } = await inRange(supabase.from('visitors').select('geo'), range)
   const rows = data ?? []
 
   const countries = new Map<string, number>()

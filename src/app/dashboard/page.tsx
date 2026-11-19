@@ -4,12 +4,17 @@ import {
   getOverviewStats,
   getEventsPerDay,
   getGeoBreakdown,
+  type DateRange,
 } from '@/lib/analytics'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { FunnelChart } from '@/components/dashboard/funnel-chart'
 import { EventsChart } from '@/components/dashboard/events-chart'
 import { GeoSection } from '@/components/dashboard/geo-section'
+import {
+  OverviewFilter,
+  type PresetKey,
+} from '@/components/dashboard/overview-filter'
 import {
   Card,
   CardContent,
@@ -19,12 +24,62 @@ import {
 } from '@/components/ui/card'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 
-export default async function DashboardPage() {
+type SP = {
+  preset?: string
+  from?: string
+  to?: string
+  tz?: string
+}
+
+const PRESETS: PresetKey[] = ['today', 'yesterday', '7d', '30d', 'day', 'custom']
+
+function resolveRange(sp: SP): { range: DateRange; preset: PresetKey } {
+  const preset = (PRESETS as string[]).includes(sp.preset ?? '')
+    ? (sp.preset as PresetKey)
+    : '30d'
+  const tz = Number(sp.tz)
+  if (sp.from && sp.to) {
+    return {
+      range: {
+        from: sp.from,
+        to: sp.to,
+        tz: Number.isFinite(tz) ? tz : 0,
+      },
+      preset,
+    }
+  }
+  // Padrão: últimos 30 dias (UTC).
+  const now = new Date()
+  const from = new Date(now.getTime() - 29 * 864e5)
+  from.setUTCHours(0, 0, 0, 0)
+  return {
+    range: { from: from.toISOString(), to: now.toISOString(), tz: 0 },
+    preset: '30d',
+  }
+}
+
+function fmtRangeLabel(range: DateRange): string {
+  const opt: Intl.DateTimeFormatOptions = {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }
+  const a = new Date(range.from).toLocaleDateString('pt-BR', opt)
+  const b = new Date(range.to).toLocaleDateString('pt-BR', opt)
+  return a === b ? a : `${a} – ${b}`
+}
+
+export default async function DashboardPage(props: {
+  searchParams: Promise<SP>
+}) {
+  const sp = await props.searchParams
+  const { range, preset } = resolveRange(sp)
+
   const supabase = await createClient()
   const [stats, perDay, geo] = await Promise.all([
-    getOverviewStats(supabase),
-    getEventsPerDay(supabase, 30),
-    getGeoBreakdown(supabase),
+    getOverviewStats(supabase, range),
+    getEventsPerDay(supabase, range),
+    getGeoBreakdown(supabase, range),
   ])
 
   const conversionPct = `${(stats.conversionRate * 100).toFixed(2)}%`
@@ -35,6 +90,13 @@ export default async function DashboardPage() {
         title="Visão geral"
         description="Resumo de visitantes, eventos e conversões."
       />
+
+      <div className="mb-4">
+        <OverviewFilter preset={preset} from={range.from} to={range.to} />
+        <p className="mt-2 text-xs text-muted-foreground">
+          Período: <span className="text-foreground">{fmtRangeLabel(range)}</span>
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
