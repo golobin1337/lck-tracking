@@ -34,7 +34,17 @@ type SP = {
   tz?: string
 }
 
-const PRESETS: PresetKey[] = ['today', 'yesterday', '7d', '30d', 'day', 'custom']
+const PRESETS: PresetKey[] = [
+  'max',
+  'today',
+  'yesterday',
+  '7d',
+  '30d',
+  'this_month',
+  'last_month',
+  'day',
+  'custom',
+]
 
 function resolveRange(sp: SP): { range: DateRange; preset: PresetKey } {
   const preset = (PRESETS as string[]).includes(sp.preset ?? '')
