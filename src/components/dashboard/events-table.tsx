@@ -33,6 +33,15 @@ export type EventRow = {
   response_ga4: unknown
 }
 
+// Cor do badge por tipo de evento.
+function eventVariant(
+  name: string
+): 'secondary' | 'warning' | 'success' {
+  if (name === 'Purchase') return 'success'
+  if (name === 'InitiateCheckout') return 'warning'
+  return 'secondary'
+}
+
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', {
     day: '2-digit',
@@ -116,7 +125,9 @@ export function EventsTable({ events }: { events: EventRow[] }) {
                   {fmtDate(ev.created_at)}
                 </td>
                 <td className="px-3 py-2">
-                  <Badge variant="secondary">{ev.event_name}</Badge>
+                  <Badge variant={eventVariant(ev.event_name)}>
+                    {ev.event_name}
+                  </Badge>
                 </td>
                 <td className="max-w-[180px] truncate px-3 py-2 font-mono text-xs text-muted-foreground">
                   {ev.trck_user_id ?? '—'}
