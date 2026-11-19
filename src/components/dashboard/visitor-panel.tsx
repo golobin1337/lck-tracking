@@ -16,11 +16,22 @@ type Visitor = {
   utm_campaign: string | null
   utm_term: string | null
   utm_content: string | null
+  referrer: string | null
   fbp: string | null
   fbc: string | null
   ga_client_id: string | null
   ga_session_id: string | null
   ip: string | null
+}
+
+// Encurta o referrer para o domínio (ex.: "instagram.com").
+function refLabel(ref?: string | null): string | null {
+  if (!ref) return null
+  try {
+    return new URL(ref).hostname.replace(/^www\./, '')
+  } catch {
+    return ref
+  }
 }
 
 type EventItem = {
@@ -120,7 +131,7 @@ export function VisitorPanel({
         supabase
           .from('visitors')
           .select(
-            'trck_user_id, email, phone, geo, utm_source, utm_medium, utm_campaign, utm_term, utm_content, fbp, fbc, ga_client_id, ga_session_id, ip'
+            'trck_user_id, email, phone, geo, utm_source, utm_medium, utm_campaign, utm_term, utm_content, referrer, fbp, fbc, ga_client_id, ga_session_id, ip'
           )
           .eq('trck_user_id', trckUserId)
           .maybeSingle(),
@@ -196,6 +207,7 @@ export function VisitorPanel({
                   <Field label="Origem" value={origem} />
                   <Field label="Campanha" value={visitor.utm_campaign} />
                   <Field label="Conteúdo" value={visitor.utm_content} />
+                  <Field label="Referrer" value={visitor.referrer} />
                   <Field label="fbp" value={visitor.fbp} mono />
                   <Field label="fbc" value={visitor.fbc} mono />
                   <Field label="ga_client_id" value={visitor.ga_client_id} mono />
@@ -217,12 +229,15 @@ export function VisitorPanel({
                 ) : (
                   <div className="flex flex-col gap-2">
                     {events.map((e) => {
+                      const ref = refLabel(visitor?.referrer)
                       const utm =
                         e.utm_campaign || e.utm_source
                           ? [e.utm_source, e.utm_campaign]
                               .filter(Boolean)
                               .join(' · ')
-                          : 'sem UTMs'
+                          : ref
+                            ? `via ${ref}`
+                            : 'direto / sem UTMs'
                       const isOpen = openJson === e.id
                       return (
                         <div
