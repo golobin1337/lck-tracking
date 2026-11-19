@@ -88,14 +88,16 @@
     try {
       var url = BASE + path
       var data = JSON.stringify(body)
-      // sendBeacon quando possível (não bloqueia navegação)
+      // text/plain é CORS-safelisted → não dispara preflight (sendBeacon não
+      // sabe fazer preflight). O servidor faz request.json() e parseia igual.
+      var CT = 'text/plain;charset=UTF-8'
       if (navigator.sendBeacon) {
-        var blob = new Blob([data], { type: 'application/json' })
+        var blob = new Blob([data], { type: CT })
         if (navigator.sendBeacon(url, blob)) return Promise.resolve()
       }
       return fetch(url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': CT },
         body: data,
         keepalive: true,
         mode: 'cors',
