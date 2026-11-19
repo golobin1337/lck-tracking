@@ -89,13 +89,28 @@ export function EventsTable({ events }: { events: EventRow[] }) {
                   </Badge>
                 </td>
                 <td className="px-3 py-3 text-muted-foreground">
-                  {ev.utm_campaign || '—'}
+                  <span
+                    className="block max-w-[200px] truncate"
+                    title={ev.utm_campaign ?? undefined}
+                  >
+                    {ev.utm_campaign || '—'}
+                  </span>
                 </td>
                 <td className="px-3 py-3 text-muted-foreground">
-                  {ev.utm_term || '—'}
+                  <span
+                    className="block max-w-[140px] truncate"
+                    title={ev.utm_term ?? undefined}
+                  >
+                    {ev.utm_term || '—'}
+                  </span>
                 </td>
                 <td className="px-3 py-3 text-muted-foreground">
-                  {ev.utm_content || '—'}
+                  <span
+                    className="block max-w-[180px] truncate"
+                    title={ev.utm_content ?? undefined}
+                  >
+                    {ev.utm_content || '—'}
+                  </span>
                 </td>
                 <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
                   {fmtLocal(ev.geo)}
