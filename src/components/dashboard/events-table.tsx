@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import { VisitorPanel } from '@/components/dashboard/visitor-panel'
 
 export type EventGeo = {
   country?: string | null
@@ -84,6 +85,7 @@ function JsonView({ value }: { value: unknown }) {
 
 export function EventsTable({ events }: { events: EventRow[] }) {
   const [selected, setSelected] = React.useState<EventRow | null>(null)
+  const [panelTrck, setPanelTrck] = React.useState<string | null>(null)
   const [tab, setTab] = React.useState<(typeof TABS)[number]['key']>(
     'payload_meta'
   )
@@ -119,7 +121,12 @@ export function EventsTable({ events }: { events: EventRow[] }) {
             {events.map((ev) => (
               <tr
                 key={ev.id}
-                className="border-b border-border/60 last:border-0 hover:bg-secondary/40"
+                onClick={() =>
+                  ev.trck_user_id && setPanelTrck(ev.trck_user_id)
+                }
+                className={`border-b border-border/60 last:border-0 hover:bg-secondary/40 ${
+                  ev.trck_user_id ? 'cursor-pointer' : ''
+                }`}
               >
                 <td className="whitespace-nowrap px-3 py-2 tabular text-muted-foreground">
                   {fmtDate(ev.created_at)}
@@ -145,7 +152,10 @@ export function EventsTable({ events }: { events: EventRow[] }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => open(ev)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      open(ev)
+                    }}
                     aria-label="Ver payload"
                   >
                     <Eye />
@@ -186,6 +196,13 @@ export function EventsTable({ events }: { events: EventRow[] }) {
           {selected && <JsonView value={selected[tab]} />}
         </DialogContent>
       </Dialog>
+
+      {panelTrck && (
+        <VisitorPanel
+          trckUserId={panelTrck}
+          onClose={() => setPanelTrck(null)}
+        />
+      )}
     </>
   )
 }
