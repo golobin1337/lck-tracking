@@ -115,35 +115,39 @@ export default async function ConfiguracoesPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              Conexão com o Meta (Login com Facebook)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Suspense fallback={null}>
-              <MetaConnect
-                fbAppId={settings?.fb_app_id ?? null}
-                hasSecret={!!settings?.fb_app_secret_enc}
-              />
-            </Suspense>
-          </CardContent>
-        </Card>
+          <CardContent className="flex flex-col gap-6 pt-5">
+            {/* Conexão via OAuth (preferencial) */}
+            <div>
+              <h3 className="mb-1 font-semibold">
+                Contas de anúncio (Meta Ads)
+              </h3>
+              <p className="mb-4 text-xs text-muted-foreground">
+                Conecte pelo Facebook (recomendado) — puxa suas contas com um
+                token válido.
+              </p>
+              <Suspense fallback={null}>
+                <MetaConnect
+                  fbAppId={settings?.fb_app_id ?? null}
+                  hasSecret={!!settings?.fb_app_secret_enc}
+                />
+              </Suspense>
+            </div>
 
-        <Card>
-          <CardContent className="pt-5">
-            <IntegrationManager
-              title="Contas de anúncio (Meta Ads)"
-              description="Insights de campanhas para ROAS e CPA."
-              items={adAccounts}
-              labels={{
-                idLabel: 'Ad Account ID',
-                idPlaceholder: 'act_123... ou 123...',
-                secretLabel: 'Token de Ads',
-                secretPlaceholder: 'EAAB...',
-              }}
-              kind="ad"
-            />
+            {/* Lista de contas (populada pelo OAuth ou manualmente) */}
+            <div className="border-t border-border pt-5">
+              <IntegrationManager
+                title="Contas conectadas"
+                description="Insights de campanhas para ROAS e CPA. Adicione manualmente só se precisar."
+                items={adAccounts}
+                labels={{
+                  idLabel: 'Ad Account ID',
+                  idPlaceholder: 'act_123... ou 123...',
+                  secretLabel: 'Token de Ads',
+                  secretPlaceholder: 'EAAB...',
+                }}
+                kind="ad"
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
