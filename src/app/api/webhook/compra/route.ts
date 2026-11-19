@@ -311,11 +311,13 @@ export async function POST(request: Request) {
         trck_user_id: trckUserId,
         event_name: 'Purchase',
         event_id: `wh-${transactionId}`,
-        utm_source: purchaseRow.utm_source ?? null,
-        utm_medium: purchaseRow.utm_medium ?? null,
-        utm_campaign: purchaseRow.utm_campaign ?? null,
-        utm_term: purchaseRow.utm_term ?? null,
-        utm_content: purchaseRow.utm_content ?? null,
+        // Preferir os UTMs reais do anúncio (do visitante) para exibição;
+        // o utm_content do checkout costuma ser o lck.id (não o anúncio).
+        utm_source: visitor?.utm_source ?? tracking?.utm_source ?? null,
+        utm_medium: visitor?.utm_medium ?? tracking?.utm_medium ?? null,
+        utm_campaign: visitor?.utm_campaign ?? tracking?.utm_campaign ?? null,
+        utm_term: visitor?.utm_term ?? tracking?.utm_term ?? null,
+        utm_content: visitor?.utm_content ?? tracking?.utm_content ?? null,
         ip: visitor?.ip ?? tracking?.ip ?? null,
         geo,
         payload_meta: {
