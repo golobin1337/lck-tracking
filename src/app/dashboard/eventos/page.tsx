@@ -30,7 +30,7 @@ export default async function EventosPage(props: {
   let query = supabase
     .from('events_log')
     .select(
-      'id, created_at, event_name, trck_user_id, utm_source, utm_campaign, ip, payload_meta, response_meta, payload_ga4, response_ga4',
+      'id, created_at, event_name, trck_user_id, utm_source, utm_campaign, ip, geo, payload_meta, response_meta, payload_ga4, response_ga4',
       { count: 'exact' }
     )
     .order('created_at', { ascending: false })

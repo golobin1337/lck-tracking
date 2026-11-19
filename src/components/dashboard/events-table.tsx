@@ -12,6 +12,12 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 
+export type EventGeo = {
+  country?: string | null
+  state?: string | null
+  city?: string | null
+} | null
+
 export type EventRow = {
   id: string
   created_at: string
@@ -20,6 +26,7 @@ export type EventRow = {
   utm_source: string | null
   utm_campaign: string | null
   ip: string | null
+  geo: EventGeo
   payload_meta: unknown
   response_meta: unknown
   payload_ga4: unknown
@@ -34,6 +41,14 @@ function fmtDate(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function fmtGeo(geo: EventGeo): { label: string; title: string } {
+  if (!geo) return { label: '—', title: '' }
+  const loc = [geo.state, geo.country].filter(Boolean).join('/')
+  const label = loc || geo.country || geo.city || '—'
+  const title = [geo.city, geo.state, geo.country].filter(Boolean).join(', ')
+  return { label, title }
 }
 
 const TABS = [
@@ -87,6 +102,7 @@ export function EventsTable({ events }: { events: EventRow[] }) {
               <th className="px-3 py-2 font-medium">Evento</th>
               <th className="px-3 py-2 font-medium">trck_user_id</th>
               <th className="px-3 py-2 font-medium">Origem</th>
+              <th className="px-3 py-2 font-medium">Geo</th>
               <th className="px-3 py-2 font-medium text-right">Payload</th>
             </tr>
           </thead>
@@ -107,6 +123,12 @@ export function EventsTable({ events }: { events: EventRow[] }) {
                 </td>
                 <td className="px-3 py-2 text-muted-foreground">
                   {ev.utm_source ?? '—'}
+                </td>
+                <td
+                  className="whitespace-nowrap px-3 py-2 text-muted-foreground"
+                  title={fmtGeo(ev.geo).title}
+                >
+                  {fmtGeo(ev.geo).label}
                 </td>
                 <td className="px-3 py-2 text-right">
                   <Button
