@@ -15,6 +15,9 @@ import {
   OverviewFilter,
   type PresetKey,
 } from '@/components/dashboard/overview-filter'
+import { getOwnerUserId } from '@/lib/owner'
+import { getActiveAdAccounts } from '@/lib/destinations'
+import { getAdClicksTotal } from '@/lib/meta-ads'
 import {
   Card,
   CardContent,
@@ -58,6 +61,22 @@ function resolveRange(sp: SP): { range: DateRange; preset: PresetKey } {
   }
 }
 
+// Total de cliques reais do Meta Ads no período (0 se sem conta/ token bloqueado).
+async function getAdClicks(range: DateRange): Promise<number> {
+  const ownerId = await getOwnerUserId()
+  if (!ownerId) return 0
+  const accounts = await getActiveAdAccounts(ownerId)
+  if (!accounts.length) return 0
+  const tz = range.tz ?? 0
+  const localDate = (iso: string) =>
+    new Date(new Date(iso).getTime() - tz * 60000).toISOString().slice(0, 10)
+  try {
+    return await getAdClicksTotal(accounts, localDate(range.from), localDate(range.to))
+  } catch {
+    return 0
+  }
+}
+
 function fmtRangeLabel(range: DateRange): string {
   const opt: Intl.DateTimeFormatOptions = {
     day: '2-digit',
@@ -76,8 +95,9 @@ export default async function DashboardPage(props: {
   const { range, preset } = resolveRange(sp)
 
   const supabase = await createClient()
+  const adClicks = await getAdClicks(range)
   const [stats, perDay, geo] = await Promise.all([
-    getOverviewStats(supabase, range),
+    getOverviewStats(supabase, range, adClicks),
     getEventsPerDay(supabase, range),
     getGeoBreakdown(supabase, range),
   ])
@@ -131,7 +151,7 @@ export default async function DashboardPage(props: {
         <CardHeader>
           <CardTitle className="text-base">Funil de conversão</CardTitle>
           <CardDescription>
-            Visitantes → Visualizações → Checkout → Vendas
+            Cliques → Visitas → Checkout → Vendas
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -45,7 +45,8 @@ async function distinctTrckWithEvent(
 
 export async function getOverviewStats(
   supabase: SupabaseClient,
-  range?: DateRange
+  range?: DateRange,
+  adClicks = 0
 ): Promise<OverviewStats> {
   const [visitorsRes, eventsRes, paidRes] = await Promise.all([
     inRange(
@@ -99,8 +100,8 @@ export async function getOverviewStats(
     revenue,
     conversionRate,
     funnel: [
-      { label: 'Visitantes', value: uniqueVisitors },
-      { label: 'Visualizações', value: pageViews },
+      { label: 'Cliques', value: adClicks },
+      { label: 'Visitas na página', value: pageViews },
       { label: 'Checkout', value: checkout },
       { label: 'Vendas inic.', value: salesInitiated },
       { label: 'Vendas apr.', value: paidPurchases },

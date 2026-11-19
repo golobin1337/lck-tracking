@@ -6,7 +6,9 @@ export function FunnelChart({ stages }: { stages: FunnelStage[] }) {
   const n = stages.length
   if (n === 0) return null
 
-  const base = stages[0].value || 0
+  // Base das porcentagens: a 1ª etapa (Cliques); se estiver 0 (ex.: token do
+  // Meta bloqueado), cai para a 1ª etapa não-zero para o funil seguir legível.
+  const base = stages[0].value || stages.find((s) => s.value > 0)?.value || 0
   const maxVal = Math.max(...stages.map((s) => s.value), 1)
 
   const W = 1000

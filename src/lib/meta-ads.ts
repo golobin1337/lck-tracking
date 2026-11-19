@@ -134,6 +134,70 @@ export async function fetchAdInsights(
   }
 }
 
+// ---- Total de cliques por período arbitrário (para o funil) ----
+// Usa time_range (since/until em YYYY-MM-DD) e cacheia por conta+período.
+const clicksCache = new Map<
+  string,
+  { clicks: number; fetchedAt: number; error: string | null }
+>()
+
+export async function fetchAdClicks(
+  account: { id: string; ad_account_id: string; token: string },
+  since: string,
+  until: string
+): Promise<{ clicks: number; error: string | null }> {
+  const key = `${account.id}:${since}:${until}`
+  const now = Date.now()
+  const entry = clicksCache.get(key)
+  if (entry && now - entry.fetchedAt < AD_INSIGHTS_TTL_MS) {
+    return { clicks: entry.clicks, error: entry.error }
+  }
+
+  const timeRange = encodeURIComponent(JSON.stringify({ since, until }))
+  const url =
+    `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${normalizeAccountId(
+      account.ad_account_id
+    )}/insights` +
+    `?level=account&fields=clicks&time_range=${timeRange}` +
+    `&access_token=${encodeURIComponent(account.token)}`
+
+  try {
+    const res = await fetch(url)
+    const body = await res.json().catch(() => null)
+    if (!res.ok) {
+      const msg = body?.error?.message || `HTTP ${res.status}`
+      const clicks = entry?.clicks ?? 0
+      clicksCache.set(key, { clicks, fetchedAt: now, error: msg })
+      return { clicks, error: msg }
+    }
+    const clicks = (body?.data ?? []).reduce(
+      (s: number, r: Record<string, unknown>) => s + Number(r.clicks ?? 0),
+      0
+    )
+    clicksCache.set(key, { clicks, fetchedAt: now, error: null })
+    return { clicks, error: null }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    const clicks = entry?.clicks ?? 0
+    clicksCache.set(key, { clicks, fetchedAt: now, error: msg })
+    return { clicks, error: msg }
+  }
+}
+
+// Soma os cliques de todas as contas ativas no período.
+export async function getAdClicksTotal(
+  accounts: { id: string; ad_account_id: string; token: string }[],
+  since: string,
+  until: string
+): Promise<number> {
+  let total = 0
+  for (const acc of accounts) {
+    const { clicks } = await fetchAdClicks(acc, since, until)
+    total += clicks
+  }
+  return total
+}
+
 // ---- Agregação em árvore campanha → conjunto → anúncio ----
 export type AdNode = {
   id: string
