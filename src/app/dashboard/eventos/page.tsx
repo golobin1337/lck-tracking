@@ -30,12 +30,12 @@ export default async function EventosPage(props: {
   let query = supabase
     .from('events_log')
     .select(
-      'id, created_at, event_name, trck_user_id, utm_source, utm_campaign, ip, geo, payload_meta, response_meta, payload_ga4, response_ga4',
+      'id, created_at, event_name, trck_user_id, utm_campaign, utm_term, utm_content, geo',
       { count: 'exact' }
     )
     .order('created_at', { ascending: false })
 
-  if (sp.event_name) query = query.ilike('event_name', `%${sp.event_name}%`)
+  if (sp.event_name) query = query.eq('event_name', sp.event_name)
   if (sp.trck) query = query.eq('trck_user_id', sp.trck)
   if (sp.from) query = query.gte('created_at', `${sp.from}T00:00:00`)
   if (sp.to) query = query.lte('created_at', `${sp.to}T23:59:59`)
@@ -70,13 +70,19 @@ export default async function EventosPage(props: {
           <form className="flex flex-wrap items-end gap-3" method="get">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="event_name">Evento</Label>
-              <Input
+              <select
                 id="event_name"
                 name="event_name"
-                placeholder="ex.: Purchase"
-                defaultValue={sp.event_name}
-                className="w-44"
-              />
+                defaultValue={sp.event_name ?? ''}
+                className="h-10 w-48 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Todos os eventos</option>
+                <option value="PageView">PageView</option>
+                <option value="ViewContent">ViewContent</option>
+                <option value="InitiateCheckout">InitiateCheckout</option>
+                <option value="Lead">Lead</option>
+                <option value="Purchase">Purchase</option>
+              </select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="trck">trck_user_id</Label>

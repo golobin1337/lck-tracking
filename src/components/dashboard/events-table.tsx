@@ -1,16 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Eye } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog'
 import { VisitorPanel } from '@/components/dashboard/visitor-panel'
 
 export type EventGeo = {
@@ -24,20 +15,14 @@ export type EventRow = {
   created_at: string
   event_name: string
   trck_user_id: string | null
-  utm_source: string | null
   utm_campaign: string | null
-  ip: string | null
+  utm_term: string | null
+  utm_content: string | null
   geo: EventGeo
-  payload_meta: unknown
-  response_meta: unknown
-  payload_ga4: unknown
-  response_ga4: unknown
 }
 
 // Cor do badge por tipo de evento.
-function eventVariant(
-  name: string
-): 'secondary' | 'warning' | 'success' {
+function eventVariant(name: string): 'secondary' | 'warning' | 'success' {
   if (name === 'Purchase') return 'success'
   if (name === 'InitiateCheckout') return 'warning'
   return 'secondary'
@@ -53,47 +38,14 @@ function fmtDate(iso: string): string {
   })
 }
 
-function fmtGeo(geo: EventGeo): { label: string; title: string } {
-  if (!geo) return { label: '—', title: '' }
-  const loc = [geo.state, geo.country].filter(Boolean).join('/')
-  const label = loc || geo.country || geo.city || '—'
-  const title = [geo.city, geo.state, geo.country].filter(Boolean).join(', ')
-  return { label, title }
-}
-
-const TABS = [
-  { key: 'payload_meta', label: 'Payload Meta' },
-  { key: 'response_meta', label: 'Resposta Meta' },
-  { key: 'payload_ga4', label: 'Payload GA4' },
-  { key: 'response_ga4', label: 'Resposta GA4' },
-] as const
-
-function JsonView({ value }: { value: unknown }) {
-  if (value === null || value === undefined) {
-    return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        Sem dados.
-      </p>
-    )
-  }
-  return (
-    <pre className="max-h-[50vh] overflow-auto rounded-md border border-border bg-background/60 p-3 font-mono text-xs leading-relaxed">
-      {JSON.stringify(value, null, 2)}
-    </pre>
-  )
+function fmtLocal(geo: EventGeo): string {
+  if (!geo) return '—'
+  const parts = [geo.city, geo.state, geo.country].filter(Boolean)
+  return parts.length ? parts.join(', ') : '—'
 }
 
 export function EventsTable({ events }: { events: EventRow[] }) {
-  const [selected, setSelected] = React.useState<EventRow | null>(null)
   const [panelTrck, setPanelTrck] = React.useState<string | null>(null)
-  const [tab, setTab] = React.useState<(typeof TABS)[number]['key']>(
-    'payload_meta'
-  )
-
-  function open(ev: EventRow) {
-    setSelected(ev)
-    setTab('payload_meta')
-  }
 
   if (events.length === 0) {
     return (
@@ -108,13 +60,13 @@ export function EventsTable({ events }: { events: EventRow[] }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th className="px-3 py-2 font-medium">Data</th>
-              <th className="px-3 py-2 font-medium">Evento</th>
-              <th className="px-3 py-2 font-medium">trck_user_id</th>
-              <th className="px-3 py-2 font-medium">Origem</th>
-              <th className="px-3 py-2 font-medium">Geo</th>
-              <th className="px-3 py-2 font-medium text-right">Payload</th>
+            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="px-3 py-2.5 font-medium">Quando</th>
+              <th className="px-3 py-2.5 font-medium">Evento</th>
+              <th className="px-3 py-2.5 font-medium">Campanha</th>
+              <th className="px-3 py-2.5 font-medium">Conjunto</th>
+              <th className="px-3 py-2.5 font-medium">Anúncio</th>
+              <th className="px-3 py-2.5 font-medium">Local</th>
             </tr>
           </thead>
           <tbody>
@@ -124,78 +76,35 @@ export function EventsTable({ events }: { events: EventRow[] }) {
                 onClick={() =>
                   ev.trck_user_id && setPanelTrck(ev.trck_user_id)
                 }
-                className={`border-b border-border/60 last:border-0 hover:bg-secondary/40 ${
+                className={`border-b border-border/50 last:border-0 transition-colors hover:bg-secondary/40 ${
                   ev.trck_user_id ? 'cursor-pointer' : ''
                 }`}
               >
-                <td className="whitespace-nowrap px-3 py-2 tabular text-muted-foreground">
+                <td className="whitespace-nowrap px-3 py-3 tabular text-muted-foreground">
                   {fmtDate(ev.created_at)}
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-3">
                   <Badge variant={eventVariant(ev.event_name)}>
                     {ev.event_name}
                   </Badge>
                 </td>
-                <td className="max-w-[180px] truncate px-3 py-2 font-mono text-xs text-muted-foreground">
-                  {ev.trck_user_id ?? '—'}
+                <td className="px-3 py-3 text-muted-foreground">
+                  {ev.utm_campaign || '—'}
                 </td>
-                <td className="px-3 py-2 text-muted-foreground">
-                  {ev.utm_source ?? '—'}
+                <td className="px-3 py-3 text-muted-foreground">
+                  {ev.utm_term || '—'}
                 </td>
-                <td
-                  className="whitespace-nowrap px-3 py-2 text-muted-foreground"
-                  title={fmtGeo(ev.geo).title}
-                >
-                  {fmtGeo(ev.geo).label}
+                <td className="px-3 py-3 text-muted-foreground">
+                  {ev.utm_content || '—'}
                 </td>
-                <td className="px-3 py-2 text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      open(ev)
-                    }}
-                    aria-label="Ver payload"
-                  >
-                    <Eye />
-                  </Button>
+                <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
+                  {fmtLocal(ev.geo)}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      <Dialog
-        open={!!selected}
-        onOpenChange={(o) => !o && setSelected(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selected?.event_name}</DialogTitle>
-            <DialogDescription>
-              {selected && fmtDate(selected.created_at)} ·{' '}
-              {selected?.trck_user_id ?? 'sem trck'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-wrap gap-1">
-            {TABS.map((t) => (
-              <Button
-                key={t.key}
-                variant={tab === t.key ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setTab(t.key)}
-              >
-                {t.label}
-              </Button>
-            ))}
-          </div>
-
-          {selected && <JsonView value={selected[tab]} />}
-        </DialogContent>
-      </Dialog>
 
       {panelTrck && (
         <VisitorPanel

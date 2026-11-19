@@ -29,6 +29,19 @@ type EventItem = {
   created_at: string
   utm_source: string | null
   utm_campaign: string | null
+  payload_meta: unknown
+  response_meta: unknown
+  payload_ga4: unknown
+  response_ga4: unknown
+}
+
+function hasPayload(e: EventItem): boolean {
+  return !!(
+    e.payload_meta ||
+    e.response_meta ||
+    e.payload_ga4 ||
+    e.response_ga4
+  )
 }
 
 function eventVariant(name: string): 'secondary' | 'warning' | 'success' {
@@ -84,6 +97,7 @@ export function VisitorPanel({
   const [loading, setLoading] = React.useState(true)
   const [visitor, setVisitor] = React.useState<Visitor | null>(null)
   const [events, setEvents] = React.useState<EventItem[]>([])
+  const [openJson, setOpenJson] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     const r = requestAnimationFrame(() => setShown(true))
@@ -112,7 +126,9 @@ export function VisitorPanel({
           .maybeSingle(),
         supabase
           .from('events_log')
-          .select('id, event_name, created_at, utm_source, utm_campaign')
+          .select(
+            'id, event_name, created_at, utm_source, utm_campaign, payload_meta, response_meta, payload_ga4, response_ga4'
+          )
           .eq('trck_user_id', trckUserId)
           .order('created_at', { ascending: false })
           .limit(100),
@@ -207,6 +223,7 @@ export function VisitorPanel({
                               .filter(Boolean)
                               .join(' · ')
                           : 'sem UTMs'
+                      const isOpen = openJson === e.id
                       return (
                         <div
                           key={e.id}
@@ -220,9 +237,35 @@ export function VisitorPanel({
                               {fmtDate(e.created_at)}
                             </span>
                           </div>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {utm}
-                          </p>
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <p className="text-xs text-muted-foreground">
+                              {utm}
+                            </p>
+                            {hasPayload(e) && (
+                              <button
+                                onClick={() =>
+                                  setOpenJson(isOpen ? null : e.id)
+                                }
+                                className="shrink-0 text-xs text-primary hover:underline"
+                              >
+                                {isOpen ? 'ocultar' : 'ver JSON'}
+                              </button>
+                            )}
+                          </div>
+                          {isOpen && (
+                            <pre className="mt-2 max-h-72 overflow-auto rounded-md border border-border bg-background/60 p-2 font-mono text-[11px] leading-relaxed">
+                              {JSON.stringify(
+                                {
+                                  payload_meta: e.payload_meta,
+                                  response_meta: e.response_meta,
+                                  payload_ga4: e.payload_ga4,
+                                  response_ga4: e.response_ga4,
+                                },
+                                null,
+                                2
+                              )}
+                            </pre>
+                          )}
                         </div>
                       )
                     })}
