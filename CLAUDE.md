@@ -47,8 +47,10 @@ exibe tudo num painel autenticado (visão geral, eventos, faturamento, campanhas
   no banco pelo painel**, não em env. Tokens/api_secret **cifrados** via pgcrypto
   (`encrypt_secret`/`decrypt_secret`), descriptografados só no servidor.
 - Cadastro público **DESLIGADO** no Supabase Auth.
-- Endpoints públicos (`/api/identify`, `/api/event`, `/api/webhook/compra`):
-  validar entrada + rate limiting. Webhook exige `Authorization` header.
+- Endpoints públicos (`/api/identify`, `/api/event`, `/api/webhook/compra`,
+  `/api/track-config`): validar entrada + rate limiting. Webhook exige
+  `Authorization` header. `/api/track-config` é GET e expõe **só IDs públicos**
+  (pixel_id, measurement_id dos ativos) — **nunca** segredos.
 
 ## Arquitetura de pastas
 
@@ -73,6 +75,20 @@ Quando uma API tem versão na URL, manter numa constante única e fácil de atua
 - GA4 MP endpoint: `src/lib/ga4.ts` (Fase 3).
 
 Sempre conferir a doc oficial atual antes de integrar (Meta, Google, Supabase, Next.js).
+
+## Snippet do navegador (`public/t.js`)
+
+- Script embutível que o usuário cola nas páginas de venda externas:
+  `<script defer src="https://<app>/t.js" data-base="https://<app>"></script>`.
+- Gera `trck_user_id` (cookie `_lck`, 1 ano), lê `_fbp`/`_fbc` + UTMs, carrega
+  gtag.js e Meta Pixel dos destinos ativos (IDs de `/api/track-config`), captura
+  `ga_client_id`/`ga_session_id` e chama `/api/identify` + `/api/event`.
+- **GA4 web só pela gtag**; Measurement Protocol **só** na compra do webhook
+  (reusa `ga_client_id`/`ga_session_id` do visitante). Mesmo `event_id` no Pixel
+  do navegador e no CAPI → dedup.
+- API pública: `window.lck.id`, `lck.track(name, params)`, `lck.identify(traits)`.
+- Pôr `utm_content=<lck.id>` na URL do checkout Wiapy para o webhook casar a compra.
+- Instruções de instalação ficam no card "Instalação" em Configurações.
 
 ## Webhook da Wiapy (resumo da doc)
 

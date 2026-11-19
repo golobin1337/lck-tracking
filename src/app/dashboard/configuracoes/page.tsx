@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SettingsSection } from '@/components/dashboard/settings-section'
+import { InstallSnippet } from '@/components/dashboard/install-snippet'
 import {
   IntegrationManager,
   type IntegrationItem,
@@ -63,6 +64,15 @@ export default async function ConfiguracoesPage() {
               currency={settings?.currency ?? 'BRL'}
               testEventCode={settings?.test_event_code ?? null}
             />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Instalação (script do site)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <InstallSnippet />
           </CardContent>
         </Card>
 
