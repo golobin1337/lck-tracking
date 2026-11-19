@@ -282,6 +282,35 @@ export async function POST(request: Request) {
     return json({ error: 'db_error', detail: upsertError.message }, 500)
   }
 
+  // Registra o Purchase na timeline de Eventos (só quando pago).
+  // event_id único por transação → idempotente (reenvios não duplicam).
+  if (payment.status === 'paid') {
+    await admin.from('events_log').upsert(
+      {
+        user_id: ownerId,
+        trck_user_id: trckUserId,
+        event_name: 'Purchase',
+        event_id: `wh-${transactionId}`,
+        utm_source: purchaseRow.utm_source ?? null,
+        utm_medium: purchaseRow.utm_medium ?? null,
+        utm_campaign: purchaseRow.utm_campaign ?? null,
+        utm_term: purchaseRow.utm_term ?? null,
+        utm_content: purchaseRow.utm_content ?? null,
+        ip: visitor?.ip ?? tracking?.ip ?? null,
+        geo,
+        payload_meta: {
+          source: 'webhook',
+          transaction_id: transactionId,
+          value: valor,
+          currency,
+          produto: checkout.title ?? null,
+          payment_method: payment.payment_method ?? null,
+        },
+      },
+      { onConflict: 'event_id', ignoreDuplicates: true }
+    )
+  }
+
   return json({
     ok: true,
     transaction_id: transactionId,
