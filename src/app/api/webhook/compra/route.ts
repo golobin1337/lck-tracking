@@ -29,6 +29,14 @@ function json(data: unknown, status = 200): Response {
   })
 }
 
+// fbc = "fb.1.<timestamp>.<fbclid>". O fbclid é constante do anúncio ao
+// checkout (o timestamp muda entre domínios), então serve de ponte.
+function extractFbclid(fbc?: string | null): string | null {
+  if (!fbc) return null
+  const parts = fbc.split('.')
+  return parts.length >= 4 ? parts.slice(3).join('.') : null
+}
+
 export async function POST(request: Request) {
   const ownerId = await getOwnerUserId()
   if (!ownerId) return json({ error: 'owner_not_found' }, 500)
@@ -77,15 +85,19 @@ export async function POST(request: Request) {
   const phoneHash = hashPhone(customer.mobile_phone)
 
   // ---- Vincular visitante / trck_user_id ----
-  // 1) utm_content (convenção: trck_user_id na URL do checkout)
-  // 2) fbp (cookie do Facebook — ponte confiável quando utm_content está ocupado)
-  // 3) fallback por email_hash
-  // 4) fallback por phone_hash
+  // Prioridade:
+  // 1) utm_content = lck.id (quando a URL do checkout carrega o trck)
+  // 2) fbclid dentro do fbc — PONTE PRINCIPAL: o fbclid é o mesmo do anúncio
+  //    ao checkout; não depende de utm_content (que é do anúncio/UTMify).
+  // 3) fbp (raro; cookie muda entre domínios)
+  // 4) email_hash  5) phone_hash
   const utmTrck = tracking?.utm_content?.trim() || null
   const trackFbp = tracking?.fbp?.trim() || null
+  const trackFbclid = extractFbclid(tracking?.fbc)
   let visitor: Visitor | null = null
   let matchType:
     | 'trck_user_id'
+    | 'fbclid'
     | 'fbp'
     | 'email'
     | 'phone'
@@ -101,6 +113,22 @@ export async function POST(request: Request) {
     if (data) {
       visitor = data as Visitor
       matchType = 'trck_user_id'
+    }
+  }
+  if (!visitor && trackFbclid) {
+    // Busca ampla por sufixo e confirma o fbclid exato em memória.
+    const { data } = await admin
+      .from('visitors')
+      .select('*')
+      .like('fbc', `%${trackFbclid}`)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    const match = (data as Visitor[] | null)?.find(
+      (v) => extractFbclid(v.fbc) === trackFbclid
+    )
+    if (match) {
+      visitor = match
+      matchType = 'fbclid'
     }
   }
   if (!visitor && trackFbp) {
