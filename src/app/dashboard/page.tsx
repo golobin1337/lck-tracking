@@ -3,11 +3,13 @@ import { createClient } from '@/lib/supabase/server'
 import {
   getOverviewStats,
   getEventsPerDay,
+  getGeoBreakdown,
 } from '@/lib/analytics'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { FunnelChart } from '@/components/dashboard/funnel-chart'
 import { EventsChart } from '@/components/dashboard/events-chart'
+import { GeoSection } from '@/components/dashboard/geo-section'
 import {
   Card,
   CardContent,
@@ -19,9 +21,10 @@ import { formatCurrency, formatNumber } from '@/lib/utils'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const [stats, perDay] = await Promise.all([
+  const [stats, perDay, geo] = await Promise.all([
     getOverviewStats(supabase),
     getEventsPerDay(supabase, 30),
+    getGeoBreakdown(supabase),
   ])
 
   const conversionPct = `${(stats.conversionRate * 100).toFixed(2)}%`
@@ -83,6 +86,15 @@ export default async function DashboardPage() {
           <EventsChart data={perDay} />
         </CardContent>
       </Card>
+
+      <div className="mt-6">
+        <h2 className="mb-1 text-base font-semibold">Geolocalização</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          {formatNumber(geo.located)} de {formatNumber(geo.total)} visitantes
+          localizados pelo IP.
+        </p>
+        <GeoSection geo={geo} />
+      </div>
     </>
   )
 }
