@@ -30,13 +30,18 @@ async function decrypt(
   return (data as string) ?? null
 }
 
-export async function getActivePixels(userId: string): Promise<ActivePixel[]> {
+export async function getActivePixels(
+  userId: string,
+  offerId?: string | null
+): Promise<ActivePixel[]> {
   const admin = createAdminClient()
-  const { data, error } = await admin
+  let q = admin
     .from('meta_pixels')
     .select('id, label, pixel_id, capi_token_enc')
     .eq('user_id', userId)
     .eq('active', true)
+  if (offerId) q = q.eq('offer_id', offerId)
+  const { data, error } = await q
   if (error || !data) return []
 
   const out: ActivePixel[] = []
@@ -62,14 +67,17 @@ type ActiveAdAccount = {
 }
 
 export async function getActiveAdAccounts(
-  userId: string
+  userId: string,
+  offerId?: string | null
 ): Promise<ActiveAdAccount[]> {
   const admin = createAdminClient()
-  const { data, error } = await admin
+  let q = admin
     .from('meta_ad_accounts')
     .select('id, label, ad_account_id, ads_token_enc')
     .eq('user_id', userId)
     .eq('active', true)
+  if (offerId) q = q.eq('offer_id', offerId)
+  const { data, error } = await q
   if (error || !data) return []
 
   const out: ActiveAdAccount[] = []
@@ -88,14 +96,17 @@ export async function getActiveAdAccounts(
 }
 
 export async function getActiveGa4Accounts(
-  userId: string
+  userId: string,
+  offerId?: string | null
 ): Promise<ActiveGa4[]> {
   const admin = createAdminClient()
-  const { data, error } = await admin
+  let q = admin
     .from('ga4_accounts')
     .select('id, label, measurement_id, api_secret_enc')
     .eq('user_id', userId)
     .eq('active', true)
+  if (offerId) q = q.eq('offer_id', offerId)
+  const { data, error } = await q
   if (error || !data) return []
 
   const out: ActiveGa4[] = []

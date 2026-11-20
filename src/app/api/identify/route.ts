@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getOwnerUserId } from '@/lib/owner'
+import { getOfferIdBySlug, getDefaultOfferId } from '@/lib/offers'
 import { hashEmail, hashPhone, hashText, digitsOnly } from '@/lib/hash'
 import {
   getClientIp,
@@ -17,6 +18,7 @@ export function OPTIONS() {
 }
 
 type IdentifyBody = {
+  offer?: string
   trck_user_id?: string
   email?: string
   phone?: string
@@ -65,9 +67,12 @@ export async function POST(request: Request) {
   const trckUserId = body.trck_user_id?.trim() || randomUUID()
   const userAgent = getUserAgent(request.headers)
   const geo = geoFromHeaders(request.headers)
+  const offerId =
+    (await getOfferIdBySlug(body.offer)) ?? (await getDefaultOfferId())
 
   const row = compact({
     user_id: ownerId,
+    offer_id: offerId,
     trck_user_id: trckUserId,
     email: body.email ?? null,
     email_hash: hashEmail(body.email) ?? null,

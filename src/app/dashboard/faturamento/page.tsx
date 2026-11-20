@@ -44,6 +44,7 @@ import {
   type PurchaseRow,
 } from '@/components/dashboard/purchases-table'
 import { getOwnerUserId } from '@/lib/owner'
+import { getCurrentOfferId } from '@/lib/offers'
 import { getActiveAdAccounts } from '@/lib/destinations'
 import { getAdSpendTotal, getAdSpendByHour } from '@/lib/meta-ads'
 import { formatCurrency, formatNumber, cn } from '@/lib/utils'
@@ -52,12 +53,13 @@ const PAGE_SIZE = 50
 
 // Gasto em anúncios no período (total + por hora). 0/zeros se Meta não conectado.
 async function getAdSpend(
-  range: DateRange
+  range: DateRange,
+  offerId: string | null
 ): Promise<{ total: number; byHour: number[] }> {
   const zeros = { total: 0, byHour: new Array(24).fill(0) }
   const ownerId = await getOwnerUserId()
   if (!ownerId) return zeros
-  const accounts = await getActiveAdAccounts(ownerId)
+  const accounts = await getActiveAdAccounts(ownerId, offerId)
   if (!accounts.length) return zeros
   const tz = range.tz ?? 0
   const localDate = (iso: string) =>
@@ -94,15 +96,16 @@ export default async function FaturamentoPage(props: {
   const { range, preset, isDefault } = resolveRange(sp)
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
   const supabase = await createClient()
+  const offerId = await getCurrentOfferId()
 
   const [stats, payments, approval, products, salesByHour, spend] =
     await Promise.all([
-      getRevenueStats(supabase, range),
-      getPaymentBreakdown(supabase, range),
-      getApprovalRates(supabase, range),
-      getProductBreakdown(supabase, range),
-      getSalesByHour(supabase, range),
-      getAdSpend(range),
+      getRevenueStats(supabase, range, offerId),
+      getPaymentBreakdown(supabase, range, offerId),
+      getApprovalRates(supabase, range, offerId),
+      getProductBreakdown(supabase, range, offerId),
+      getSalesByHour(supabase, range, offerId),
+      getAdSpend(range, offerId),
     ])
 
   const adSpend = spend.total
@@ -126,6 +129,7 @@ export default async function FaturamentoPage(props: {
     )
     .order('created_at', { ascending: false })
 
+  if (offerId) query = query.eq('offer_id', offerId)
   if (sp.status) query = query.eq('status', sp.status)
   query = query.gte('created_at', range.from).lte('created_at', range.to)
 

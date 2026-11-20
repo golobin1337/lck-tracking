@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentOfferId } from '@/lib/offers'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -26,6 +27,7 @@ export default async function EventosPage(props: {
   const sp = await props.searchParams
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
   const supabase = await createClient()
+  const offerId = await getCurrentOfferId()
 
   let query = supabase
     .from('events_log')
@@ -35,6 +37,7 @@ export default async function EventosPage(props: {
     )
     .order('created_at', { ascending: false })
 
+  if (offerId) query = query.eq('offer_id', offerId)
   if (sp.event_name) query = query.eq('event_name', sp.event_name)
   if (sp.trck) query = query.eq('trck_user_id', sp.trck)
   if (sp.from) query = query.gte('created_at', `${sp.from}T00:00:00`)

@@ -18,6 +18,7 @@ import {
   type RangeSP,
 } from '@/lib/date-range'
 import { getOwnerUserId } from '@/lib/owner'
+import { getCurrentOfferId } from '@/lib/offers'
 import { getActiveAdAccounts } from '@/lib/destinations'
 import { getAdClicksTotal } from '@/lib/meta-ads'
 import {
@@ -30,10 +31,13 @@ import {
 import { formatCurrency, formatNumber } from '@/lib/utils'
 
 // Total de cliques reais do Meta Ads no período (0 se sem conta/ token bloqueado).
-async function getAdClicks(range: DateRange): Promise<number> {
+async function getAdClicks(
+  range: DateRange,
+  offerId: string | null
+): Promise<number> {
   const ownerId = await getOwnerUserId()
   if (!ownerId) return 0
-  const accounts = await getActiveAdAccounts(ownerId)
+  const accounts = await getActiveAdAccounts(ownerId, offerId)
   if (!accounts.length) return 0
   const tz = range.tz ?? 0
   const localDate = (iso: string) =>
@@ -50,13 +54,14 @@ export default async function DashboardPage(props: {
 }) {
   const sp = await props.searchParams
   const { range, preset, isDefault } = resolveRange(sp)
+  const offerId = await getCurrentOfferId()
 
   const supabase = await createClient()
-  const adClicks = await getAdClicks(range)
+  const adClicks = await getAdClicks(range, offerId)
   const [stats, perDay, geo] = await Promise.all([
-    getOverviewStats(supabase, range, adClicks),
-    getEventsPerDay(supabase, range),
-    getGeoBreakdown(supabase, range),
+    getOverviewStats(supabase, range, adClicks, offerId),
+    getEventsPerDay(supabase, range, offerId),
+    getGeoBreakdown(supabase, range, offerId),
   ])
 
   const conversionPct = `${(stats.conversionRate * 100).toFixed(2)}%`

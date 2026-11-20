@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { DollarSign, TrendingUp, Target, RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentOfferId } from '@/lib/offers'
 import { getActiveAdAccounts } from '@/lib/destinations'
 import { getRevenueByCampaign } from '@/lib/analytics'
 import {
@@ -38,7 +39,8 @@ export default async function CampanhasPage(props: {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const accounts = user ? await getActiveAdAccounts(user.id) : []
+  const offerId = await getCurrentOfferId()
+  const accounts = user ? await getActiveAdAccounts(user.id, offerId) : []
   const preset = (sp.preset as DatePreset) || 'last_30d'
   const selected = sp.account && sp.account !== 'all' ? sp.account : 'all'
   const force = sp.refresh === '1'
@@ -70,7 +72,7 @@ export default async function CampanhasPage(props: {
   const toQuery =
     selected === 'all' ? accounts : accounts.filter((a) => a.id === selected)
 
-  const revByCamp = await getRevenueByCampaign(supabase)
+  const revByCamp = await getRevenueByCampaign(supabase, offerId)
 
   let rows: AdInsightRow[] = []
   let fetchedAt = 0

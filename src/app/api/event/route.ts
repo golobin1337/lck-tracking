@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getOwnerUserId } from '@/lib/owner'
+import { getOfferIdBySlug, getDefaultOfferId } from '@/lib/offers'
 import { getActivePixels } from '@/lib/destinations'
 import { hashText } from '@/lib/hash'
 import { getClientIp, getUserAgent } from '@/lib/request'
@@ -16,6 +17,7 @@ export function OPTIONS() {
 }
 
 type EventBody = {
+  offer?: string
   trck_user_id?: string
   event_name?: string
   event_id?: string
@@ -133,8 +135,14 @@ export async function POST(request: Request) {
     custom_data: customData,
   }
 
-  // Disparar para TODOS os pixels ativos.
-  const pixels = await getActivePixels(ownerId)
+  // Oferta: do visitante, senão do slug enviado, senão a padrão.
+  const offerId =
+    (visitor as { offer_id?: string | null } | null)?.offer_id ??
+    (await getOfferIdBySlug(body.offer)) ??
+    (await getDefaultOfferId())
+
+  // Disparar para os pixels ativos DA OFERTA.
+  const pixels = await getActivePixels(ownerId, offerId)
   const metaPayload = buildMetaPayload(eventInput, testEventCode)
   const metaResponses: unknown[] = []
   for (const pixel of pixels) {
@@ -155,6 +163,7 @@ export async function POST(request: Request) {
   // Registrar no events_log.
   const { error: insertError } = await admin.from('events_log').insert({
     user_id: ownerId,
+    offer_id: offerId,
     trck_user_id: body.trck_user_id ?? null,
     event_name: body.event_name,
     event_id: eventId,

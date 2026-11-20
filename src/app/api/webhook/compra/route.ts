@@ -43,21 +43,31 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient()
 
-  // ---- Autenticação por token no header Authorization ----
+  // Config global (moeda, test_event_code).
   const { data: settings } = await admin
     .from('settings')
-    .select('webhook_token, currency, test_event_code')
+    .select('currency, test_event_code')
     .eq('user_id', ownerId)
     .maybeSingle()
 
-  const expected = settings?.webhook_token
-  if (!expected) return json({ error: 'webhook_not_configured' }, 401)
-
+  // ---- Autenticação: o token identifica a OFERTA (cada oferta tem o seu) ----
   const authHeader = request.headers.get('authorization') || ''
   const provided = authHeader.replace(/^Bearer\s+/i, '').trim()
-  if (!provided || !safeEqual(provided, expected)) {
-    return json({ error: 'unauthorized' }, 401)
+  if (!provided) return json({ error: 'unauthorized' }, 401)
+
+  const { data: offersData } = await admin
+    .from('offers')
+    .select('id, webhook_token')
+    .eq('user_id', ownerId)
+
+  let offerId: string | null = null
+  for (const o of offersData ?? []) {
+    if (o.webhook_token && safeEqual(provided, o.webhook_token)) {
+      offerId = o.id
+      break
+    }
   }
+  if (!offerId) return json({ error: 'unauthorized' }, 401)
 
   // ---- Parse ----
   let payload: WiapyPayload
@@ -109,6 +119,7 @@ export async function POST(request: Request) {
       .from('visitors')
       .select('*')
       .eq('trck_user_id', utmTrck)
+      .eq('offer_id', offerId)
       .maybeSingle()
     if (data) {
       visitor = data as Visitor
@@ -120,6 +131,7 @@ export async function POST(request: Request) {
     const { data } = await admin
       .from('visitors')
       .select('*')
+      .eq('offer_id', offerId)
       .like('fbc', `%${trackFbclid}`)
       .order('created_at', { ascending: false })
       .limit(20)
@@ -136,6 +148,7 @@ export async function POST(request: Request) {
       .from('visitors')
       .select('*')
       .eq('fbp', trackFbp)
+      .eq('offer_id', offerId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -149,6 +162,7 @@ export async function POST(request: Request) {
       .from('visitors')
       .select('*')
       .eq('email_hash', emailHash)
+      .eq('offer_id', offerId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -162,6 +176,7 @@ export async function POST(request: Request) {
       .from('visitors')
       .select('*')
       .eq('phone_hash', phoneHash)
+      .eq('offer_id', offerId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -191,6 +206,7 @@ export async function POST(request: Request) {
   // Linha base da compra (sempre atualiza status/dados).
   const purchaseRow: Record<string, unknown> = {
     user_id: ownerId,
+    offer_id: offerId,
     transaction_id: transactionId,
     trck_user_id: trckUserId,
     email: customer.email ?? null,
@@ -247,7 +263,7 @@ export async function POST(request: Request) {
     }
 
     // Meta CAPI → todos os pixels ativos
-    const pixels = await getActivePixels(ownerId)
+    const pixels = await getActivePixels(ownerId, offerId)
     const metaResponses: unknown[] = []
     for (const pixel of pixels) {
       const r = await sendMetaEvent(
@@ -275,7 +291,7 @@ export async function POST(request: Request) {
     const ga4Responses: unknown[] = []
     const clientId = visitor?.ga_client_id
     if (clientId) {
-      const accounts = await getActiveGa4Accounts(ownerId)
+      const accounts = await getActiveGa4Accounts(ownerId, offerId)
       for (const acc of accounts) {
         const r = await sendGA4Event(
           { measurement_id: acc.measurement_id, api_secret: acc.api_secret },
@@ -336,6 +352,7 @@ export async function POST(request: Request) {
     await admin.from('events_log').upsert(
       {
         user_id: ownerId,
+        offer_id: offerId,
         trck_user_id: trckUserId,
         event_name: 'Purchase',
         event_id: `wh-${transactionId}`,

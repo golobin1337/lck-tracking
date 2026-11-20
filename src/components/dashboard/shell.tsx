@@ -3,10 +3,14 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, Menu, X, LogOut, ChevronDown } from 'lucide-react'
+import { Activity, Menu, X, LogOut } from 'lucide-react'
 import { navItems } from './nav'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { PrizeBadge } from '@/components/dashboard/prize-badge'
+import {
+  OfferSelector,
+  type OfferOption,
+} from '@/components/dashboard/offer-selector'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { logout } from '@/app/dashboard/actions'
@@ -29,31 +33,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <p className="px-4 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
       {children}
     </p>
-  )
-}
-
-// Seletor de conta/dashboard (placeholder — múltiplas ofertas virão depois).
-function AccountSelector({ email }: { email: string }) {
-  const letter = (email?.[0] || 'C').toUpperCase()
-  return (
-    <button
-      type="button"
-      title="Troca entre dashboards (ofertas) em breve"
-      className="mx-2 flex items-center gap-2.5 rounded-lg border border-border bg-card/60 px-2.5 py-2 text-left transition-colors hover:bg-secondary/50"
-    >
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
-        {letter}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">
-          Conta principal
-        </span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {email}
-        </span>
-      </span>
-      <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-    </button>
   )
 }
 
@@ -98,15 +77,17 @@ function ThemeRow() {
 }
 
 function SidebarContent({
-  email,
+  offers,
+  currentOfferId,
   onNavigate,
 }: {
-  email: string
+  offers: OfferOption[]
+  currentOfferId: string | null
   onNavigate?: () => void
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto pb-3 pt-3">
-      <AccountSelector email={email} />
+      <OfferSelector offers={offers} currentOfferId={currentOfferId} />
 
       <SectionLabel>Menu principal</SectionLabel>
       <NavLinks onNavigate={onNavigate} />
@@ -129,10 +110,12 @@ function SidebarContent({
 }
 
 export function DashboardShell({
-  email,
+  offers,
+  currentOfferId,
   children,
 }: {
-  email: string
+  offers: OfferOption[]
+  currentOfferId: string | null
   children: React.ReactNode
 }) {
   const [open, setOpen] = React.useState(false)
@@ -144,7 +127,7 @@ export function DashboardShell({
         <div className="flex h-16 items-center border-b border-border px-2">
           <Brand />
         </div>
-        <SidebarContent email={email} />
+        <SidebarContent offers={offers} currentOfferId={currentOfferId} />
       </aside>
 
       {/* Drawer mobile */}
@@ -167,7 +150,11 @@ export function DashboardShell({
                 <X />
               </Button>
             </div>
-            <SidebarContent email={email} onNavigate={() => setOpen(false)} />
+            <SidebarContent
+              offers={offers}
+              currentOfferId={currentOfferId}
+              onNavigate={() => setOpen(false)}
+            />
           </aside>
         </div>
       )}

@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getOwnerUserId } from '@/lib/owner'
+import { getOfferIdBySlug, getDefaultOfferId } from '@/lib/offers'
 import { getClientIp } from '@/lib/request'
 import { rateLimit } from '@/lib/rate-limit'
 import { corsHeaders, corsPreflight } from '@/lib/cors'
@@ -35,19 +36,27 @@ export async function GET(request: Request) {
     return new Response(JSON.stringify({ pixels: [], ga4: [] }), { headers })
   }
 
+  // Oferta (pela query ?offer=slug) → senão a oferta padrão.
+  const slug = new URL(request.url).searchParams.get('offer')
+  const offerId =
+    (await getOfferIdBySlug(slug)) ?? (await getDefaultOfferId())
+
   const admin = createAdminClient()
-  const [pixelsRes, ga4Res] = await Promise.all([
-    admin
-      .from('meta_pixels')
-      .select('pixel_id')
-      .eq('user_id', ownerId)
-      .eq('active', true),
-    admin
-      .from('ga4_accounts')
-      .select('measurement_id')
-      .eq('user_id', ownerId)
-      .eq('active', true),
-  ])
+  const pixelQ = admin
+    .from('meta_pixels')
+    .select('pixel_id')
+    .eq('user_id', ownerId)
+    .eq('active', true)
+  const ga4Q = admin
+    .from('ga4_accounts')
+    .select('measurement_id')
+    .eq('user_id', ownerId)
+    .eq('active', true)
+  if (offerId) {
+    pixelQ.eq('offer_id', offerId)
+    ga4Q.eq('offer_id', offerId)
+  }
+  const [pixelsRes, ga4Res] = await Promise.all([pixelQ, ga4Q])
 
   const pixels = (pixelsRes.data ?? [])
     .map((p) => p.pixel_id)
