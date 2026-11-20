@@ -1,10 +1,15 @@
 import Link from 'next/link'
 import { DollarSign, Receipt, RotateCcw, ShoppingCart } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { getRevenueStats, getPaymentBreakdown } from '@/lib/analytics'
+import {
+  getRevenueStats,
+  getPaymentBreakdown,
+  getApprovalRates,
+} from '@/lib/analytics'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { PaymentDonut } from '@/components/dashboard/payment-donut'
+import { ApprovalRates } from '@/components/dashboard/approval-rates'
 import {
   Card,
   CardContent,
@@ -45,9 +50,10 @@ export default async function FaturamentoPage(props: {
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
   const supabase = await createClient()
 
-  const [stats, payments] = await Promise.all([
+  const [stats, payments, approval] = await Promise.all([
     getRevenueStats(supabase),
     getPaymentBreakdown(supabase),
+    getApprovalRates(supabase),
   ])
 
   let query = supabase
@@ -114,13 +120,22 @@ export default async function FaturamentoPage(props: {
         />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Vendas por pagamento</CardTitle>
           </CardHeader>
           <CardContent>
             <PaymentDonut data={payments} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Taxa de aprovação</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ApprovalRates data={approval} />
           </CardContent>
         </Card>
 

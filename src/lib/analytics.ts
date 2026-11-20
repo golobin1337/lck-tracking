@@ -259,6 +259,56 @@ export async function getPaymentBreakdown(
   ]
 }
 
+export type ApprovalRate = {
+  key: string
+  label: string
+  rate: number | null // 0..1, ou null quando não houve pedidos
+  color: string
+}
+
+// Taxa de aprovação por método = aprovados / gerados.
+// Aprovado = pagamento que passou (paid, refunded, chargedback).
+export async function getApprovalRates(
+  supabase: SupabaseClient,
+  range?: DateRange
+): Promise<ApprovalRate[]> {
+  const { data } = await inRange(
+    supabase.from('purchases').select('payment_method, status'),
+    range
+  )
+  const agg: Record<string, { a: number; t: number }> = {
+    card: { a: 0, t: 0 },
+    pix: { a: 0, t: 0 },
+    boleto: { a: 0, t: 0 },
+  }
+  const approved = new Set(['paid', 'refunded', 'chargedback'])
+  for (const r of data ?? []) {
+    const m = (r.payment_method ?? '').toLowerCase()
+    const key =
+      m === 'pix'
+        ? 'pix'
+        : m === 'credit_card' || m === 'card' || m === 'cartao'
+          ? 'card'
+          : m === 'boleto'
+            ? 'boleto'
+            : null
+    if (!key) continue
+    agg[key].t++
+    if (approved.has((r.status ?? '').toLowerCase())) agg[key].a++
+  }
+  const mk = (key: string, label: string, color: string): ApprovalRate => ({
+    key,
+    label,
+    color,
+    rate: agg[key].t > 0 ? agg[key].a / agg[key].t : null,
+  })
+  return [
+    mk('card', 'Cartão', 'hsl(var(--cyan))'),
+    mk('pix', 'Pix', 'hsl(222 85% 58%)'),
+    mk('boleto', 'Boleto', 'hsl(var(--amber))'),
+  ]
+}
+
 export type RevenueStats = {
   revenue: number
   paidCount: number
