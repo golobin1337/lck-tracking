@@ -134,23 +134,24 @@ export async function fetchAdInsights(
   }
 }
 
-// ---- Total de cliques por período arbitrário (para o funil) ----
+// ---- Totais (cliques + gasto) por período arbitrário ----
 // Usa time_range (since/until em YYYY-MM-DD) e cacheia por conta+período.
-const clicksCache = new Map<
+// Uma chamada serve o funil (cliques) e o faturamento (gasto).
+const totalsCache = new Map<
   string,
-  { clicks: number; fetchedAt: number; error: string | null }
+  { clicks: number; spend: number; fetchedAt: number; error: string | null }
 >()
 
-export async function fetchAdClicks(
+export async function fetchAdTotals(
   account: { id: string; ad_account_id: string; token: string },
   since: string,
   until: string
-): Promise<{ clicks: number; error: string | null }> {
+): Promise<{ clicks: number; spend: number; error: string | null }> {
   const key = `${account.id}:${since}:${until}`
   const now = Date.now()
-  const entry = clicksCache.get(key)
+  const entry = totalsCache.get(key)
   if (entry && now - entry.fetchedAt < AD_INSIGHTS_TTL_MS) {
-    return { clicks: entry.clicks, error: entry.error }
+    return { clicks: entry.clicks, spend: entry.spend, error: entry.error }
   }
 
   const timeRange = encodeURIComponent(JSON.stringify({ since, until }))
@@ -158,7 +159,7 @@ export async function fetchAdClicks(
     `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${normalizeAccountId(
       account.ad_account_id
     )}/insights` +
-    `?level=account&fields=clicks&time_range=${timeRange}` +
+    `?level=account&fields=clicks,spend&time_range=${timeRange}` +
     `&access_token=${encodeURIComponent(account.token)}`
 
   try {
@@ -167,20 +168,21 @@ export async function fetchAdClicks(
     if (!res.ok) {
       const msg = body?.error?.message || `HTTP ${res.status}`
       const clicks = entry?.clicks ?? 0
-      clicksCache.set(key, { clicks, fetchedAt: now, error: msg })
-      return { clicks, error: msg }
+      const spend = entry?.spend ?? 0
+      totalsCache.set(key, { clicks, spend, fetchedAt: now, error: msg })
+      return { clicks, spend, error: msg }
     }
-    const clicks = (body?.data ?? []).reduce(
-      (s: number, r: Record<string, unknown>) => s + Number(r.clicks ?? 0),
-      0
-    )
-    clicksCache.set(key, { clicks, fetchedAt: now, error: null })
-    return { clicks, error: null }
+    const rows: Record<string, unknown>[] = body?.data ?? []
+    const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0)
+    const spend = rows.reduce((s, r) => s + Number(r.spend ?? 0), 0)
+    totalsCache.set(key, { clicks, spend, fetchedAt: now, error: null })
+    return { clicks, spend, error: null }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     const clicks = entry?.clicks ?? 0
-    clicksCache.set(key, { clicks, fetchedAt: now, error: msg })
-    return { clicks, error: msg }
+    const spend = entry?.spend ?? 0
+    totalsCache.set(key, { clicks, spend, fetchedAt: now, error: msg })
+    return { clicks, spend, error: msg }
   }
 }
 
@@ -192,8 +194,22 @@ export async function getAdClicksTotal(
 ): Promise<number> {
   let total = 0
   for (const acc of accounts) {
-    const { clicks } = await fetchAdClicks(acc, since, until)
+    const { clicks } = await fetchAdTotals(acc, since, until)
     total += clicks
+  }
+  return total
+}
+
+// Soma o gasto (investimento) de todas as contas ativas no período.
+export async function getAdSpendTotal(
+  accounts: { id: string; ad_account_id: string; token: string }[],
+  since: string,
+  until: string
+): Promise<number> {
+  let total = 0
+  for (const acc of accounts) {
+    const { spend } = await fetchAdTotals(acc, since, until)
+    total += spend
   }
   return total
 }

@@ -23,9 +23,27 @@ import {
   PurchasesTable,
   type PurchaseRow,
 } from '@/components/dashboard/purchases-table'
-import { formatCurrency, formatNumber } from '@/lib/utils'
+import { getOwnerUserId } from '@/lib/owner'
+import { getActiveAdAccounts } from '@/lib/destinations'
+import { getAdSpendTotal } from '@/lib/meta-ads'
+import { formatCurrency, formatNumber, cn } from '@/lib/utils'
 
 const PAGE_SIZE = 50
+
+// Gasto total em anúncios (all-time) para o ROI. 0 se Meta não conectado.
+async function getTotalAdSpend(): Promise<number> {
+  const ownerId = await getOwnerUserId()
+  if (!ownerId) return 0
+  const accounts = await getActiveAdAccounts(ownerId)
+  if (!accounts.length) return 0
+  const until = new Date().toISOString().slice(0, 10)
+  const since = new Date(Date.now() - 365 * 3 * 864e5).toISOString().slice(0, 10)
+  try {
+    return await getAdSpendTotal(accounts, since, until)
+  } catch {
+    return 0
+  }
+}
 
 type SP = {
   status?: string
@@ -50,11 +68,16 @@ export default async function FaturamentoPage(props: {
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
   const supabase = await createClient()
 
-  const [stats, payments, approval] = await Promise.all([
+  const [stats, payments, approval, adSpend] = await Promise.all([
     getRevenueStats(supabase),
     getPaymentBreakdown(supabase),
     getApprovalRates(supabase),
+    getTotalAdSpend(),
   ])
+
+  const profit = stats.revenue - adSpend
+  const roiPct = adSpend > 0 ? (profit / adSpend) * 100 : null
+  const roas = adSpend > 0 ? stats.revenue / adSpend : null
 
   let query = supabase
     .from('purchases')
@@ -120,7 +143,72 @@ export default async function FaturamentoPage(props: {
         />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">
+            ROI (retorno sobre investimento)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {roiPct !== null && roas !== null ? (
+            <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
+              <div>
+                <p className="text-xs text-muted-foreground">ROI</p>
+                <p
+                  className={cn(
+                    'tabular text-4xl font-bold',
+                    roiPct >= 0 ? 'text-success' : 'text-destructive'
+                  )}
+                >
+                  {roiPct >= 0 ? '+' : ''}
+                  {roiPct.toFixed(1)}%
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">ROAS</p>
+                <p className="tabular text-2xl font-semibold">
+                  {roas.toFixed(2)}x
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Receita</p>
+                <p className="tabular text-lg font-semibold text-success">
+                  {formatCurrency(stats.revenue)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Investido</p>
+                <p className="tabular text-lg font-semibold">
+                  {formatCurrency(adSpend)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Lucro</p>
+                <p
+                  className={cn(
+                    'tabular text-lg font-semibold',
+                    profit >= 0 ? 'text-success' : 'text-destructive'
+                  )}
+                >
+                  {formatCurrency(profit)}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Conecte sua conta do <b>Meta Ads</b> (Configurações → Login com
+              Facebook) para calcular o ROI. Sem o investimento (gasto em
+              anúncios), não dá pra medir o retorno. Sua receita no período é{' '}
+              <span className="font-medium text-foreground">
+                {formatCurrency(stats.revenue)}
+              </span>
+              .
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Vendas por pagamento</CardTitle>
