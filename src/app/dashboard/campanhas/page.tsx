@@ -172,8 +172,20 @@ export default async function CampanhasPage(props: {
 
       {error && (
         <Card className="mb-4 border-destructive/40">
-          <CardContent className="py-3 text-sm text-destructive">
-            Erro ao buscar o Meta Ads: {error}
+          <CardContent className="py-3 text-sm">
+            {/(blocked|5258005)/i.test(error) ? (
+              <p className="text-destructive">
+                <b>Acesso à Marketing API bloqueado pelo Facebook</b> (erro
+                5258005). O login conectou suas contas, mas o <b>app</b> do
+                Facebook não tem permissão de ler insights. Verifique no
+                developers.facebook.com: a <b>Marketing API</b> adicionada, o app
+                em modo que permita o acesso e o <i>Data Use Checkup</i> em dia.
+              </p>
+            ) : (
+              <p className="text-destructive">
+                Erro ao buscar o Meta Ads: {error}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

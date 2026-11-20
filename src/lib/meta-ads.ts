@@ -17,14 +17,20 @@ const MIN_REFRESH_MS = 5 * 60_000
 // Se a Meta falhar (ex.: token bloqueado), paramos de chamar por 5 min.
 const META_TIMEOUT_MS = 4000
 let metaDownUntil = 0
+let lastMetaError: string | null = null
 function metaIsDown(): boolean {
   return Date.now() < metaDownUntil
 }
-function markMetaDown(): void {
+function markMetaDown(msg?: string): void {
   metaDownUntil = Date.now() + 5 * 60_000
+  if (msg) lastMetaError = msg
 }
 function markMetaUp(): void {
   metaDownUntil = 0
+  lastMetaError = null
+}
+function downReason(): string {
+  return lastMetaError ?? 'meta_down'
 }
 async function metaFetch(url: string): Promise<Response> {
   const ctrl = new AbortController()
@@ -114,7 +120,7 @@ export async function fetchAdInsights(
       fetchedAt: entry?.fetchedAt ?? now,
       cached: true,
       throttled: false,
-      error: entry?.error ?? 'meta_down',
+      error: entry?.error ?? downReason(),
     }
   }
 
@@ -131,9 +137,9 @@ export async function fetchAdInsights(
     const res = await metaFetch(url)
     const body = await res.json().catch(() => null)
     if (!res.ok) {
-      markMetaDown()
       const msg =
         body?.error?.message || `HTTP ${res.status}`
+      markMetaDown(msg)
       const fallback = entry?.rows ?? []
       const result: CacheEntry = {
         rows: fallback,
@@ -162,8 +168,8 @@ export async function fetchAdInsights(
     cache.set(key, result)
     return { ...result, cached: false, throttled: false }
   } catch (err) {
-    markMetaDown()
     const msg = err instanceof Error ? err.message : String(err)
+    markMetaDown(msg)
     const fallback = entry?.rows ?? []
     const result: CacheEntry = { rows: fallback, fetchedAt: now, error: msg }
     cache.set(key, result)
@@ -195,7 +201,7 @@ export async function fetchAdTotals(
     return {
       clicks: entry?.clicks ?? 0,
       spend: entry?.spend ?? 0,
-      error: 'meta_down',
+      error: downReason(),
     }
   }
 
@@ -211,8 +217,8 @@ export async function fetchAdTotals(
     const res = await metaFetch(url)
     const body = await res.json().catch(() => null)
     if (!res.ok) {
-      markMetaDown()
       const msg = body?.error?.message || `HTTP ${res.status}`
+      markMetaDown(msg)
       const clicks = entry?.clicks ?? 0
       const spend = entry?.spend ?? 0
       totalsCache.set(key, { clicks, spend, fetchedAt: now, error: msg })
@@ -225,8 +231,8 @@ export async function fetchAdTotals(
     totalsCache.set(key, { clicks, spend, fetchedAt: now, error: null })
     return { clicks, spend, error: null }
   } catch (err) {
-    markMetaDown()
     const msg = err instanceof Error ? err.message : String(err)
+    markMetaDown(msg)
     const clicks = entry?.clicks ?? 0
     const spend = entry?.spend ?? 0
     totalsCache.set(key, { clicks, spend, fetchedAt: now, error: msg })
@@ -294,7 +300,7 @@ async function fetchAdSpendByHourAccount(
     const res = await metaFetch(url)
     const body = await res.json().catch(() => null)
     if (!res.ok) {
-      markMetaDown()
+      markMetaDown(body?.error?.message || `HTTP ${res.status}`)
       hourlyCache.set(key, { hours, fetchedAt: now }) // cacheia zeros no erro
       return hours
     }
