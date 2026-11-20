@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { X } from 'lucide-react'
+import { X, ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -239,36 +239,59 @@ export function VisitorPanel({
                             ? `via ${ref}`
                             : 'direto / sem UTMs'
                       const isOpen = openJson === e.id
+                      const clickable = hasPayload(e)
                       return (
                         <div
                           key={e.id}
-                          className="rounded-lg border border-border bg-card/40 p-2.5"
+                          className={cn(
+                            'overflow-hidden rounded-lg border bg-card/40 transition-colors',
+                            isOpen
+                              ? 'border-primary/50'
+                              : 'border-border',
+                            clickable && !isOpen && 'hover:border-primary/40'
+                          )}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <Badge variant={eventVariant(e.event_name)}>
-                              {e.event_name}
-                            </Badge>
-                            <span className="tabular text-xs text-muted-foreground">
-                              {fmtDate(e.created_at)}
-                            </span>
-                          </div>
-                          <div className="mt-1 flex items-center justify-between gap-2">
-                            <p className="text-xs text-muted-foreground">
-                              {utm}
-                            </p>
-                            {hasPayload(e) && (
-                              <button
-                                onClick={() =>
-                                  setOpenJson(isOpen ? null : e.id)
-                                }
-                                className="shrink-0 text-xs text-primary hover:underline"
-                              >
-                                {isOpen ? 'ocultar' : 'ver JSON'}
-                              </button>
+                          <div
+                            role={clickable ? 'button' : undefined}
+                            onClick={() =>
+                              clickable && setOpenJson(isOpen ? null : e.id)
+                            }
+                            className={cn(
+                              'flex items-start justify-between gap-2 p-2.5',
+                              clickable &&
+                                'cursor-pointer hover:bg-secondary/40'
                             )}
+                          >
+                            <div className="min-w-0">
+                              <Badge variant={eventVariant(e.event_name)}>
+                                {e.event_name}
+                              </Badge>
+                              <p className="mt-1.5 truncate text-xs text-muted-foreground">
+                                {utm}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              <span className="tabular text-xs text-muted-foreground">
+                                {fmtDate(e.created_at)}
+                              </span>
+                              {clickable && (
+                                <span className="flex items-center gap-0.5 text-[11px] text-primary">
+                                  detalhes
+                                  <ChevronDown
+                                    className={cn(
+                                      'size-3.5 transition-transform',
+                                      isOpen && 'rotate-180'
+                                    )}
+                                  />
+                                </span>
+                              )}
+                            </div>
                           </div>
                           {isOpen && (
-                            <pre className="mt-2 max-h-72 overflow-auto rounded-md border border-border bg-background/60 p-2 font-mono text-[11px] leading-relaxed">
+                            <pre
+                              onClick={(ev) => ev.stopPropagation()}
+                              className="max-h-72 overflow-auto border-t border-border bg-background/60 p-2.5 font-mono text-[11px] leading-relaxed"
+                            >
                               {JSON.stringify(
                                 {
                                   payload_meta: e.payload_meta,
