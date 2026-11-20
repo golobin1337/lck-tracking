@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SettingsSection } from '@/components/dashboard/settings-section'
 import { InstallSnippet } from '@/components/dashboard/install-snippet'
 import { MetaConnect } from '@/components/dashboard/meta-connect'
+import { metaConnectKey } from '@/lib/meta-connect-key'
 import {
   IntegrationManager,
   type IntegrationItem,
@@ -129,6 +130,11 @@ export default async function ConfiguracoesPage() {
                 <MetaConnect
                   fbAppId={settings?.fb_app_id ?? null}
                   hasSecret={!!settings?.fb_app_secret_enc}
+                  connectKey={
+                    settings?.fb_app_id
+                      ? metaConnectKey(settings.fb_app_id)
+                      : null
+                  }
                 />
               </Suspense>
             </div>

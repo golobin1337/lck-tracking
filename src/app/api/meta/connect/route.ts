@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getOwnerUserId } from '@/lib/owner'
+import { metaConnectKey } from '@/lib/meta-connect-key'
 import { GRAPH_API_VERSION } from '@/lib/meta'
 
 export const runtime = 'nodejs'
@@ -16,14 +17,11 @@ function baseUrl(request: Request): string {
 export async function GET(request: Request) {
   const base = baseUrl(request)
 
-  // Precisa estar autenticado no painel.
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return NextResponse.redirect(`${base}/login`)
+  const ownerId = await getOwnerUserId()
+  if (!ownerId) {
+    return NextResponse.redirect(`${base}/dashboard/configuracoes?meta=no_owner`)
+  }
 
-  const ownerId = (await getOwnerUserId()) ?? user.id
   const admin = createAdminClient()
   const { data: settings } = await admin
     .from('settings')
@@ -36,6 +34,17 @@ export async function GET(request: Request) {
     return NextResponse.redirect(
       `${base}/dashboard/configuracoes?meta=no_app`
     )
+  }
+
+  // Autorização: chave compartilhável (link para terceiros) OU login no painel.
+  const k = new URL(request.url).searchParams.get('k')
+  const validKey = !!k && k === metaConnectKey(appId)
+  if (!validKey) {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return NextResponse.redirect(`${base}/login`)
   }
 
   const state = randomBytes(16).toString('hex')

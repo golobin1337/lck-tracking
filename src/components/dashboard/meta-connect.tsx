@@ -26,9 +26,11 @@ const MESSAGES: Record<string, { ok: boolean; text: string }> = {
 export function MetaConnect({
   fbAppId,
   hasSecret,
+  connectKey,
 }: {
   fbAppId: string | null
   hasSecret: boolean
+  connectKey: string | null
 }) {
   const router = useRouter()
   const params = useSearchParams()
@@ -38,11 +40,18 @@ export function MetaConnect({
   const [pending, startTransition] = React.useTransition()
   const [saved, setSaved] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
+  const [copiedShare, setCopiedShare] = React.useState(false)
   const [callbackUrl, setCallbackUrl] = React.useState('')
+  const [shareUrl, setShareUrl] = React.useState('')
 
   React.useEffect(() => {
     setCallbackUrl(`${window.location.origin}/api/meta/callback`)
-  }, [])
+    if (connectKey) {
+      setShareUrl(
+        `${window.location.origin}/api/meta/connect?k=${connectKey}`
+      )
+    }
+  }, [connectKey])
 
   function onSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -160,6 +169,44 @@ export function MetaConnect({
           </p>
         )}
       </div>
+
+      {/* 3) Link para enviar a um sócio/terceiro conectar a conta dele */}
+      {configured && shareUrl && (
+        <div className="rounded-lg border border-border bg-background/50 p-3">
+          <p className="mb-1 text-sm font-medium">
+            Link para o sócio conectar
+          </p>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Envie este link. Ao abrir, ele conecta a conta de anúncio dele{' '}
+            <b>sem precisar logar no painel</b>.
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 break-all rounded-md border border-border bg-background/60 px-2 py-1 font-mono text-xs">
+              {shareUrl}
+            </code>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                navigator.clipboard?.writeText(shareUrl)
+                setCopiedShare(true)
+                setTimeout(() => setCopiedShare(false), 1500)
+              }}
+              title="Copiar link"
+            >
+              {copiedShare ? <Check className="text-success" /> : <Copy />}
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            ⚠️ Para o sócio conseguir autorizar, ele precisa ter acesso ao app
+            no Facebook: adicione-o como <b>Testador/Admin</b> em
+            developers.facebook.com → seu app → <b>Funções do app</b> (apps em
+            desenvolvimento). Para liberar a qualquer pessoa, o app precisa ir
+            para <b>produção</b> com App Review do <code>ads_read</code>.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
