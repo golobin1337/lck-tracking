@@ -227,6 +227,38 @@ export async function getGeoBreakdown(
   }
 }
 
+export type PaymentSlice = {
+  key: string
+  label: string
+  count: number
+  color: string
+}
+
+// Distribuição de compras pagas por método de pagamento.
+export async function getPaymentBreakdown(
+  supabase: SupabaseClient,
+  range?: DateRange
+): Promise<PaymentSlice[]> {
+  const { data } = await inRange(
+    supabase.from('purchases').select('payment_method').eq('status', 'paid'),
+    range
+  )
+  const c = { pix: 0, card: 0, boleto: 0, outros: 0 }
+  for (const r of data ?? []) {
+    const m = (r.payment_method ?? '').toLowerCase()
+    if (m === 'pix') c.pix++
+    else if (m === 'credit_card' || m === 'card' || m === 'cartao') c.card++
+    else if (m === 'boleto') c.boleto++
+    else c.outros++
+  }
+  return [
+    { key: 'pix', label: 'Pix', count: c.pix, color: 'hsl(222 85% 58%)' },
+    { key: 'card', label: 'Cartão', count: c.card, color: 'hsl(var(--cyan))' },
+    { key: 'boleto', label: 'Boleto', count: c.boleto, color: 'hsl(var(--amber))' },
+    { key: 'outros', label: 'Outros', count: c.outros, color: 'hsl(var(--destructive))' },
+  ]
+}
+
 export type RevenueStats = {
   revenue: number
   paidCount: number

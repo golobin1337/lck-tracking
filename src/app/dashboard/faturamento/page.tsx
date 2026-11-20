@@ -1,10 +1,16 @@
 import Link from 'next/link'
 import { DollarSign, Receipt, RotateCcw, ShoppingCart } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { getRevenueStats } from '@/lib/analytics'
+import { getRevenueStats, getPaymentBreakdown } from '@/lib/analytics'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
-import { Card, CardContent } from '@/components/ui/card'
+import { PaymentDonut } from '@/components/dashboard/payment-donut'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -39,7 +45,10 @@ export default async function FaturamentoPage(props: {
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
   const supabase = await createClient()
 
-  const stats = await getRevenueStats(supabase)
+  const [stats, payments] = await Promise.all([
+    getRevenueStats(supabase),
+    getPaymentBreakdown(supabase),
+  ])
 
   let query = supabase
     .from('purchases')
@@ -105,7 +114,18 @@ export default async function FaturamentoPage(props: {
         />
       </div>
 
-      <Card className="mb-4 mt-6">
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Vendas por pagamento</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PaymentDonut data={payments} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mb-4 mt-4">
         <CardContent className="pt-5">
           <form className="flex flex-wrap items-end gap-3" method="get">
             <div className="flex flex-col gap-1.5">
