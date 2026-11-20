@@ -1,5 +1,13 @@
 import Link from 'next/link'
-import { DollarSign, Receipt, RotateCcw, ShoppingCart } from 'lucide-react'
+import {
+  DollarSign,
+  Receipt,
+  RotateCcw,
+  ShoppingCart,
+  Megaphone,
+  Banknote,
+  Target,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import {
   getRevenueStats,
@@ -88,6 +96,8 @@ export default async function FaturamentoPage(props: {
   const profit = stats.revenue - adSpend
   const roiPct = adSpend > 0 ? (profit / adSpend) * 100 : null
   const roas = adSpend > 0 ? stats.revenue / adSpend : null
+  const cpa =
+    adSpend > 0 && stats.paidCount > 0 ? adSpend / stats.paidCount : null
 
   let query = supabase
     .from('purchases')
@@ -154,6 +164,32 @@ export default async function FaturamentoPage(props: {
           icon={RotateCcw}
           accent="text-destructive"
           hint={formatCurrency(stats.refundedAmount)}
+        />
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Gastos com anúncios"
+          value={formatCurrency(adSpend)}
+          icon={Megaphone}
+          accent="text-amber"
+          hint={adSpend > 0 ? 'investimento no período' : 'conecte o Meta Ads'}
+        />
+        <StatCard
+          label="Lucro"
+          value={formatCurrency(profit)}
+          icon={Banknote}
+          accent={profit >= 0 ? 'text-success' : 'text-destructive'}
+          hint="receita − gastos com anúncios"
+        />
+        <StatCard
+          label="CPA"
+          value={cpa !== null ? formatCurrency(cpa) : 'N/A'}
+          icon={Target}
+          accent="text-cyan"
+          hint={
+            cpa !== null ? 'custo por venda paga' : 'depende do Meta Ads'
+          }
         />
       </div>
 
