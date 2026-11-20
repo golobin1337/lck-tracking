@@ -24,6 +24,7 @@ import {
   saveAdAccount,
   deleteAdAccount,
   testAdAccount,
+  assignIntegrationOffer,
   type TestResult,
 } from '@/app/dashboard/configuracoes/actions'
 
@@ -32,7 +33,10 @@ export type IntegrationItem = {
   label: string
   idValue: string
   hasSecret: boolean
+  offerId: string | null
 }
+
+export type OfferRef = { id: string; name: string }
 
 export type IntegrationKind = 'pixel' | 'ga4' | 'ad'
 
@@ -62,12 +66,14 @@ export function IntegrationManager({
   items,
   labels,
   kind,
+  offers,
 }: {
   title: string
   description: string
   items: IntegrationItem[]
   labels: Labels
   kind: IntegrationKind
+  offers: OfferRef[]
 }) {
   const actions = ACTIONS[kind]
   const accent = KIND_ACCENT[kind]
@@ -122,6 +128,14 @@ export function IntegrationManager({
     })
   }
 
+  function onAssign(id: string, offerId: string) {
+    if (!offerId) return
+    startTransition(async () => {
+      await assignIntegrationOffer(kind, id, offerId)
+      router.refresh()
+    })
+  }
+
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
@@ -167,6 +181,25 @@ export function IntegrationManager({
                     {item.idValue}
                   </span>
                 </div>
+
+                {offers.length > 0 && (
+                  <select
+                    value={item.offerId ?? ''}
+                    onChange={(e) => onAssign(item.id, e.target.value)}
+                    disabled={pending}
+                    title="Oferta desta integração"
+                    className="h-9 shrink-0 rounded-md border border-input bg-background/60 px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="" disabled>
+                      Oferta…
+                    </option>
+                    {offers.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
 
                 {res && res !== 'loading' && (
                   <span

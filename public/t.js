@@ -25,8 +25,10 @@
   }
   var el = currentScript()
   var BASE = ''
+  var OFFER = ''
   if (el) {
     BASE = el.getAttribute('data-base') || ''
+    OFFER = el.getAttribute('data-offer') || ''
     if (!BASE && el.src) {
       try {
         BASE = new URL(el.src).origin
@@ -226,6 +228,7 @@
     var fb = readFb()
     return getGaIds(cfg.ga4[0]).then(function (ga) {
       var body = {
+        offer: OFFER || undefined,
         trck_user_id: UID,
         fbp: fb.fbp,
         fbc: fb.fbc,
@@ -278,6 +281,7 @@
     } catch (e) {}
     // Servidor → CAPI (mesmo event_id)
     var body = {
+      offer: OFFER || undefined,
       trck_user_id: UID,
       event_name: name,
       event_id: eventId,
@@ -311,7 +315,10 @@
     return
   }
 
-  fetch(BASE + '/api/track-config', { mode: 'cors' })
+  fetch(
+    BASE + '/api/track-config' + (OFFER ? '?offer=' + encodeURIComponent(OFFER) : ''),
+    { mode: 'cors' }
+  )
     .then(function (r) {
       return r.json()
     })

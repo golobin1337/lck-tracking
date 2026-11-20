@@ -49,6 +49,111 @@ async function decrypt(
 const PATH = '/dashboard/configuracoes'
 
 // ============================================================
+// Ofertas
+// ============================================================
+function slugify(s: string): string {
+  return (
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'oferta'
+  )
+}
+
+export async function createOffer(formData: FormData): Promise<void> {
+  const userId = await requireUserId()
+  const admin = createAdminClient()
+  const name = String(formData.get('name') || '').trim()
+  if (!name) throw new Error('Nome é obrigatório')
+
+  const base = slugify(name)
+  const { data: existing } = await admin
+    .from('offers')
+    .select('slug')
+    .eq('user_id', userId)
+  const taken = new Set((existing ?? []).map((o) => o.slug))
+  let slug = base
+  let i = 2
+  while (taken.has(slug)) slug = `${base}-${i++}`
+
+  await admin.from('offers').insert({ user_id: userId, name, slug })
+  revalidatePath(PATH)
+}
+
+export async function renameOffer(id: string, name: string): Promise<void> {
+  const userId = await requireUserId()
+  const admin = createAdminClient()
+  const n = name.trim()
+  if (!n) throw new Error('Nome é obrigatório')
+  await admin.from('offers').update({ name: n }).eq('id', id).eq('user_id', userId)
+  revalidatePath(PATH)
+}
+
+export async function deleteOffer(id: string): Promise<void> {
+  const userId = await requireUserId()
+  const admin = createAdminClient()
+  // Bloqueia se a oferta tiver dados ou integrações.
+  const tables = [
+    'visitors',
+    'events_log',
+    'purchases',
+    'meta_pixels',
+    'ga4_accounts',
+    'meta_ad_accounts',
+  ]
+  for (const t of tables) {
+    const { count } = await admin
+      .from(t)
+      .select('id', { count: 'exact', head: true })
+      .eq('offer_id', id)
+    if ((count ?? 0) > 0) {
+      throw new Error(
+        'Esta oferta tem dados/integrações. Reatribua antes de apagar.'
+      )
+    }
+  }
+  await admin.from('offers').delete().eq('id', id).eq('user_id', userId)
+  revalidatePath(PATH)
+}
+
+export async function generateOfferWebhookToken(id: string): Promise<string> {
+  const userId = await requireUserId()
+  const admin = createAdminClient()
+  const token = 'whk_' + randomBytes(24).toString('hex')
+  await admin
+    .from('offers')
+    .update({ webhook_token: token })
+    .eq('id', id)
+    .eq('user_id', userId)
+  revalidatePath(PATH)
+  return token
+}
+
+export async function assignIntegrationOffer(
+  kind: 'pixel' | 'ga4' | 'ad',
+  id: string,
+  offerId: string
+): Promise<void> {
+  const userId = await requireUserId()
+  const admin = createAdminClient()
+  const table =
+    kind === 'pixel'
+      ? 'meta_pixels'
+      : kind === 'ga4'
+        ? 'ga4_accounts'
+        : 'meta_ad_accounts'
+  await admin
+    .from(table)
+    .update({ offer_id: offerId })
+    .eq('id', id)
+    .eq('user_id', userId)
+  revalidatePath(PATH)
+}
+
+// ============================================================
 // Settings
 // ============================================================
 export async function saveSettings(formData: FormData): Promise<void> {

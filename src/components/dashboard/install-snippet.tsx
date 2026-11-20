@@ -29,14 +29,20 @@ function CodeBlock({ code }: { code: string }) {
   )
 }
 
-export function InstallSnippet() {
+export function InstallSnippet({
+  offerSlug,
+  offerName,
+}: {
+  offerSlug: string
+  offerName: string
+}) {
   const [origin, setOrigin] = React.useState('https://SEU-APP')
 
   React.useEffect(() => {
     setOrigin(window.location.origin)
   }, [])
 
-  const scriptTag = `<script defer src="${origin}/t.js" data-base="${origin}"></script>`
+  const scriptTag = `<script defer src="${origin}/t.js" data-base="${origin}" data-offer="${offerSlug}"></script>`
 
   const checkoutHint = `<a href="https://checkout.wiapy.com/SEU-PRODUTO?utm_content=' + window.lck.id + '">Comprar</a>
 
@@ -54,12 +60,13 @@ lck.identify({ email: 'cliente@email.com', phone: '11988887777' })`
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h3 className="font-semibold">1. Cole o script nas suas páginas</h3>
+        <h3 className="font-semibold">
+          1. Cole o script nas páginas da oferta {offerName}
+        </h3>
         <p className="mb-2 text-xs text-muted-foreground">
-          No <code className="font-mono">&lt;head&gt;</code> de todas as páginas
-          do funil (página de vendas, upsell, etc.). Ele gera o{' '}
-          <code className="font-mono">trck_user_id</code>, carrega os pixels e
-          GA4 ativos e envia os dados para o servidor.
+          No <code className="font-mono">&lt;head&gt;</code> das páginas do funil
+          <b> desta oferta</b>. O <code className="font-mono">data-offer</code>{' '}
+          abaixo carimba os dados na oferta <b>{offerName}</b>.
         </p>
         <CodeBlock code={scriptTag} />
       </div>

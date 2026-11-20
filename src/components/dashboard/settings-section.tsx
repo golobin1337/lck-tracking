@@ -8,14 +8,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   saveSettings,
-  generateWebhookToken,
+  generateOfferWebhookToken,
 } from '@/app/dashboard/configuracoes/actions'
 
 export function SettingsSection({
+  offerId,
+  offerName,
   webhookToken,
   currency,
   testEventCode,
 }: {
+  offerId: string | null
+  offerName: string
   webhookToken: string | null
   currency: string
   testEventCode: string | null
@@ -32,9 +36,16 @@ export function SettingsSection({
     setWebhookUrl(`${window.location.origin}/api/webhook/compra`)
   }, [])
 
+  // Atualiza o token exibido ao trocar de oferta.
+  React.useEffect(() => {
+    setToken(webhookToken)
+    setReveal(false)
+  }, [webhookToken, offerId])
+
   function onGenerate() {
+    if (!offerId) return
     startTransition(async () => {
-      const t = await generateWebhookToken()
+      const t = await generateOfferWebhookToken(offerId)
       setToken(t)
       setReveal(true)
       router.refresh()
@@ -66,9 +77,10 @@ export function SettingsSection({
     <div className="flex flex-col gap-6">
       {/* Webhook token */}
       <div>
-        <Label>Token do webhook (Wiapy)</Label>
+        <Label>Token do webhook (Wiapy) — oferta {offerName}</Label>
         <p className="mb-2 text-xs text-muted-foreground">
-          Cadastre este token e a URL abaixo na Wiapy (header Authorization).
+          Este token é da oferta <b>{offerName}</b>. Cadastre ele + a URL abaixo
+          no checkout Wiapy <b>desta</b> oferta (header Authorization).
         </p>
         {token ? (
           <div className="flex flex-wrap items-center gap-2">
