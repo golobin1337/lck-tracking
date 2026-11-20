@@ -137,15 +137,24 @@ export function MetaConnect({
         </div>
       )}
 
-      {/* 2) Conectar */}
+      {/* 2) Conectar — abre numa nova aba do navegador */}
       <div>
         <Button asChild disabled={!configured}>
-          <a href={configured ? '/api/meta/connect' : undefined}>
+          <a
+            href={configured ? '/api/meta/connect' : undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <LogIn />
             Conectar com Facebook
           </a>
         </Button>
-        {!configured && (
+        {configured ? (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Abre o login do Facebook em uma nova aba. Depois de autorizar, volte
+            aqui e recarregue a página.
+          </p>
+        ) : (
           <p className="mt-1.5 text-xs text-muted-foreground">
             Salve o App ID e o App Secret para habilitar a conexão.
           </p>
