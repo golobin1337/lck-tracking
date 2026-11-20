@@ -13,6 +13,7 @@ import {
   getRevenueStats,
   getPaymentBreakdown,
   getApprovalRates,
+  getProductBreakdown,
   type DateRange,
 } from '@/lib/analytics'
 import {
@@ -24,6 +25,7 @@ import { PageHeader } from '@/components/dashboard/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { PaymentDonut } from '@/components/dashboard/payment-donut'
 import { ApprovalRates } from '@/components/dashboard/approval-rates'
+import { ProductSales } from '@/components/dashboard/product-sales'
 import { OverviewFilter } from '@/components/dashboard/overview-filter'
 import {
   Card,
@@ -86,10 +88,11 @@ export default async function FaturamentoPage(props: {
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
   const supabase = await createClient()
 
-  const [stats, payments, approval, adSpend] = await Promise.all([
+  const [stats, payments, approval, products, adSpend] = await Promise.all([
     getRevenueStats(supabase, range),
     getPaymentBreakdown(supabase, range),
     getApprovalRates(supabase, range),
+    getProductBreakdown(supabase, range),
     getTotalAdSpend(range),
   ])
 
@@ -302,6 +305,15 @@ export default async function FaturamentoPage(props: {
             <Button variant="outline" size="sm" asChild className="mt-4">
               <Link href={pendingHref}>Ver pendentes</Link>
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2 lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="text-base">Vendas por produto</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ProductSales data={products} />
           </CardContent>
         </Card>
       </div>

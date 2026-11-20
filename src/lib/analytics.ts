@@ -259,6 +259,32 @@ export async function getPaymentBreakdown(
   ]
 }
 
+export type ProductSlice = { produto: string; revenue: number; pct: number }
+
+// Receita das compras pagas agrupada por produto (maior → menor).
+export async function getProductBreakdown(
+  supabase: SupabaseClient,
+  range?: DateRange
+): Promise<ProductSlice[]> {
+  const { data } = await inRange(
+    supabase.from('purchases').select('produto, valor').eq('status', 'paid'),
+    range
+  )
+  const map = new Map<string, number>()
+  for (const r of data ?? []) {
+    const name = (r.produto ?? '').trim() || 'Sem nome'
+    map.set(name, (map.get(name) ?? 0) + (Number(r.valor) || 0))
+  }
+  const total = [...map.values()].reduce((s, v) => s + v, 0)
+  return [...map.entries()]
+    .map(([produto, revenue]) => ({
+      produto,
+      revenue,
+      pct: total > 0 ? revenue / total : 0,
+    }))
+    .sort((a, b) => b.revenue - a.revenue)
+}
+
 export type ApprovalRate = {
   key: string
   label: string
