@@ -1,22 +1,12 @@
 'use client'
 
 import * as React from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown, Check, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-
-export type PresetKey =
-  | 'max'
-  | 'today'
-  | 'yesterday'
-  | '7d'
-  | '30d'
-  | 'this_month'
-  | 'last_month'
-  | 'day'
-  | 'custom'
+import { type PresetKey } from '@/lib/date-range'
 
 const LABELS: Record<PresetKey, string> = {
   max: 'Máximo',
@@ -62,12 +52,17 @@ export function OverviewFilter({
   preset,
   from,
   to,
+  basePath = '/dashboard',
+  autoToday = false,
 }: {
   preset: PresetKey
   from?: string
   to?: string
+  basePath?: string
+  autoToday?: boolean
 }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [open, setOpen] = React.useState(false)
   const [mode, setMode] = React.useState<PresetKey>(preset)
   const [specificDay, setSpecificDay] = React.useState('')
@@ -103,47 +98,61 @@ export function OverviewFilter({
     return () => document.removeEventListener('mousedown', onClick)
   }, [open])
 
-  function push(p: PresetKey, fromD: Date, toD: Date) {
+  function push(p: PresetKey, fromD: Date, toD: Date, replace = false) {
     const tz = new Date().getTimezoneOffset()
-    const params = new URLSearchParams({
-      preset: p,
-      from: fromD.toISOString(),
-      to: toD.toISOString(),
-      tz: String(tz),
-    })
-    router.push(`/dashboard?${params.toString()}`)
+    // Preserva outros params (ex.: status) e reseta a paginação.
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    params.set('preset', p)
+    params.set('from', fromD.toISOString())
+    params.set('to', toD.toISOString())
+    params.set('tz', String(tz))
+    params.delete('page')
+    const url = `${basePath}?${params.toString()}`
+    if (replace) router.replace(url)
+    else router.push(url)
   }
 
-  function applyPreset(p: PresetKey) {
+  function applyPreset(p: PresetKey, replace = false) {
     const now = new Date()
     if (p === 'max') {
-      return push(p, new Date(2020, 0, 1), endOfDay(now))
+      return push(p, new Date(2020, 0, 1), endOfDay(now), replace)
     }
-    if (p === 'today') return push(p, startOfDay(now), endOfDay(now))
+    if (p === 'today') return push(p, startOfDay(now), endOfDay(now), replace)
     if (p === 'yesterday') {
       const y = new Date(now)
       y.setDate(now.getDate() - 1)
-      return push(p, startOfDay(y), endOfDay(y))
+      return push(p, startOfDay(y), endOfDay(y), replace)
     }
     if (p === '7d') {
       const s = new Date(now)
       s.setDate(now.getDate() - 6)
-      return push(p, startOfDay(s), endOfDay(now))
+      return push(p, startOfDay(s), endOfDay(now), replace)
     }
     if (p === '30d') {
       const s = new Date(now)
       s.setDate(now.getDate() - 29)
-      return push(p, startOfDay(s), endOfDay(now))
+      return push(p, startOfDay(s), endOfDay(now), replace)
     }
     if (p === 'this_month') {
       const s = new Date(now.getFullYear(), now.getMonth(), 1)
-      return push(p, startOfDay(s), endOfDay(now))
+      return push(p, startOfDay(s), endOfDay(now), replace)
     }
     // last_month
     const s = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const e = new Date(now.getFullYear(), now.getMonth(), 0)
-    return push(p, startOfDay(s), endOfDay(e))
+    return push(p, startOfDay(s), endOfDay(e), replace)
   }
+
+  // Ao entrar sem período na URL, aplica "Hoje" no fuso local (corrige o
+  // default UTC do servidor) via replace (sem poluir o histórico).
+  const didAuto = React.useRef(false)
+  React.useEffect(() => {
+    if (autoToday && !didAuto.current) {
+      didAuto.current = true
+      applyPreset('today', true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoToday])
 
   function onSelect(p: PresetKey) {
     setOpen(false)

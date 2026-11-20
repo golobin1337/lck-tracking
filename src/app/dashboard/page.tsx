@@ -11,10 +11,12 @@ import { StatCard } from '@/components/dashboard/stat-card'
 import { FunnelChart } from '@/components/dashboard/funnel-chart'
 import { EventsChart } from '@/components/dashboard/events-chart'
 import { GeoSection } from '@/components/dashboard/geo-section'
+import { OverviewFilter } from '@/components/dashboard/overview-filter'
 import {
-  OverviewFilter,
-  type PresetKey,
-} from '@/components/dashboard/overview-filter'
+  resolveRange,
+  fmtRangeLabel,
+  type RangeSP,
+} from '@/lib/date-range'
 import { getOwnerUserId } from '@/lib/owner'
 import { getActiveAdAccounts } from '@/lib/destinations'
 import { getAdClicksTotal } from '@/lib/meta-ads'
@@ -26,50 +28,6 @@ import {
   CardDescription,
 } from '@/components/ui/card'
 import { formatCurrency, formatNumber } from '@/lib/utils'
-
-type SP = {
-  preset?: string
-  from?: string
-  to?: string
-  tz?: string
-}
-
-const PRESETS: PresetKey[] = [
-  'max',
-  'today',
-  'yesterday',
-  '7d',
-  '30d',
-  'this_month',
-  'last_month',
-  'day',
-  'custom',
-]
-
-function resolveRange(sp: SP): { range: DateRange; preset: PresetKey } {
-  const preset = (PRESETS as string[]).includes(sp.preset ?? '')
-    ? (sp.preset as PresetKey)
-    : '30d'
-  const tz = Number(sp.tz)
-  if (sp.from && sp.to) {
-    return {
-      range: {
-        from: sp.from,
-        to: sp.to,
-        tz: Number.isFinite(tz) ? tz : 0,
-      },
-      preset,
-    }
-  }
-  // Padrão: últimos 30 dias (UTC).
-  const now = new Date()
-  const from = new Date(now.getTime() - 29 * 864e5)
-  from.setUTCHours(0, 0, 0, 0)
-  return {
-    range: { from: from.toISOString(), to: now.toISOString(), tz: 0 },
-    preset: '30d',
-  }
-}
 
 // Total de cliques reais do Meta Ads no período (0 se sem conta/ token bloqueado).
 async function getAdClicks(range: DateRange): Promise<number> {
@@ -87,22 +45,11 @@ async function getAdClicks(range: DateRange): Promise<number> {
   }
 }
 
-function fmtRangeLabel(range: DateRange): string {
-  const opt: Intl.DateTimeFormatOptions = {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }
-  const a = new Date(range.from).toLocaleDateString('pt-BR', opt)
-  const b = new Date(range.to).toLocaleDateString('pt-BR', opt)
-  return a === b ? a : `${a} – ${b}`
-}
-
 export default async function DashboardPage(props: {
-  searchParams: Promise<SP>
+  searchParams: Promise<RangeSP>
 }) {
   const sp = await props.searchParams
-  const { range, preset } = resolveRange(sp)
+  const { range, preset, isDefault } = resolveRange(sp)
 
   const supabase = await createClient()
   const adClicks = await getAdClicks(range)
@@ -122,7 +69,12 @@ export default async function DashboardPage(props: {
       />
 
       <div className="mb-4">
-        <OverviewFilter preset={preset} from={range.from} to={range.to} />
+        <OverviewFilter
+          preset={preset}
+          from={range.from}
+          to={range.to}
+          autoToday={isDefault}
+        />
         <p className="mt-2 text-xs text-muted-foreground">
           Período: <span className="text-foreground">{fmtRangeLabel(range)}</span>
         </p>

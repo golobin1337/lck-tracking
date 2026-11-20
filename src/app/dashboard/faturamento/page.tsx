@@ -5,18 +5,24 @@ import {
   getRevenueStats,
   getPaymentBreakdown,
   getApprovalRates,
+  type DateRange,
 } from '@/lib/analytics'
+import {
+  resolveRange,
+  fmtRangeLabel,
+  type RangeSP,
+} from '@/lib/date-range'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { PaymentDonut } from '@/components/dashboard/payment-donut'
 import { ApprovalRates } from '@/components/dashboard/approval-rates'
+import { OverviewFilter } from '@/components/dashboard/overview-filter'
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import {
@@ -30,25 +36,28 @@ import { formatCurrency, formatNumber, cn } from '@/lib/utils'
 
 const PAGE_SIZE = 50
 
-// Gasto total em anúncios (all-time) para o ROI. 0 se Meta não conectado.
-async function getTotalAdSpend(): Promise<number> {
+// Gasto total em anúncios no período para o ROI. 0 se Meta não conectado.
+async function getTotalAdSpend(range: DateRange): Promise<number> {
   const ownerId = await getOwnerUserId()
   if (!ownerId) return 0
   const accounts = await getActiveAdAccounts(ownerId)
   if (!accounts.length) return 0
-  const until = new Date().toISOString().slice(0, 10)
-  const since = new Date(Date.now() - 365 * 3 * 864e5).toISOString().slice(0, 10)
+  const tz = range.tz ?? 0
+  const localDate = (iso: string) =>
+    new Date(new Date(iso).getTime() - tz * 60000).toISOString().slice(0, 10)
   try {
-    return await getAdSpendTotal(accounts, since, until)
+    return await getAdSpendTotal(
+      accounts,
+      localDate(range.from),
+      localDate(range.to)
+    )
   } catch {
     return 0
   }
 }
 
-type SP = {
+type SP = RangeSP & {
   status?: string
-  from?: string
-  to?: string
   page?: string
 }
 
@@ -65,14 +74,15 @@ export default async function FaturamentoPage(props: {
   searchParams: Promise<SP>
 }) {
   const sp = await props.searchParams
+  const { range, preset, isDefault } = resolveRange(sp)
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
   const supabase = await createClient()
 
   const [stats, payments, approval, adSpend] = await Promise.all([
-    getRevenueStats(supabase),
-    getPaymentBreakdown(supabase),
-    getApprovalRates(supabase),
-    getTotalAdSpend(),
+    getRevenueStats(supabase, range),
+    getPaymentBreakdown(supabase, range),
+    getApprovalRates(supabase, range),
+    getTotalAdSpend(range),
   ])
 
   const profit = stats.revenue - adSpend
@@ -88,8 +98,7 @@ export default async function FaturamentoPage(props: {
     .order('created_at', { ascending: false })
 
   if (sp.status) query = query.eq('status', sp.status)
-  if (sp.from) query = query.gte('created_at', `${sp.from}T00:00:00`)
-  if (sp.to) query = query.lte('created_at', `${sp.to}T23:59:59`)
+  query = query.gte('created_at', range.from).lte('created_at', range.to)
 
   const fromIdx = (page - 1) * PAGE_SIZE
   query = query.range(fromIdx, fromIdx + PAGE_SIZE - 1)
@@ -99,14 +108,19 @@ export default async function FaturamentoPage(props: {
   const total = count ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
-  const buildPageHref = (p: number) => {
+  // Preserva período (+ status) nos links.
+  function withParams(extra: Record<string, string>) {
     const params = new URLSearchParams()
+    params.set('preset', preset)
+    params.set('from', range.from)
+    params.set('to', range.to)
+    params.set('tz', String(range.tz ?? 0))
     if (sp.status) params.set('status', sp.status)
-    if (sp.from) params.set('from', sp.from)
-    if (sp.to) params.set('to', sp.to)
-    params.set('page', String(p))
+    for (const [k, v] of Object.entries(extra)) params.set(k, v)
     return `/dashboard/faturamento?${params.toString()}`
   }
+  const buildPageHref = (p: number) => withParams({ page: String(p) })
+  const pendingHref = withParams({ status: 'unpaid', page: '1' })
 
   return (
     <>
@@ -250,9 +264,7 @@ export default async function FaturamentoPage(props: {
               Pix/boleto gerados que ainda não foram pagos.
             </p>
             <Button variant="outline" size="sm" asChild className="mt-4">
-              <Link href="/dashboard/faturamento?status=unpaid">
-                Ver pendentes
-              </Link>
+              <Link href={pendingHref}>Ver pendentes</Link>
             </Button>
           </CardContent>
         </Card>
@@ -260,49 +272,44 @@ export default async function FaturamentoPage(props: {
 
       <Card className="mb-4 mt-4">
         <CardContent className="pt-5">
-          <form className="flex flex-wrap items-end gap-3" method="get">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="status">Status</Label>
-              <select
-                id="status"
-                name="status"
-                defaultValue={sp.status ?? ''}
-                className="h-10 rounded-md border border-input bg-background/60 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="from">De</Label>
-              <Input
-                id="from"
-                name="from"
-                type="date"
-                defaultValue={sp.from}
-                className="w-40"
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <OverviewFilter
+                preset={preset}
+                from={range.from}
+                to={range.to}
+                basePath="/dashboard/faturamento"
+                autoToday={isDefault}
               />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Período:{' '}
+                <span className="text-foreground">{fmtRangeLabel(range)}</span>
+              </p>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="to">Até</Label>
-              <Input
-                id="to"
-                name="to"
-                type="date"
-                defaultValue={sp.to}
-                className="w-40"
-              />
-            </div>
-            <div className="flex gap-2">
+
+            <form method="get" className="flex items-end gap-2">
+              <input type="hidden" name="preset" value={preset} />
+              <input type="hidden" name="from" value={range.from} />
+              <input type="hidden" name="to" value={range.to} />
+              <input type="hidden" name="tz" value={String(range.tz ?? 0)} />
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="status">Status</Label>
+                <select
+                  id="status"
+                  name="status"
+                  defaultValue={sp.status ?? ''}
+                  className="h-10 rounded-md border border-input bg-background/60 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {STATUSES.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <Button type="submit">Filtrar</Button>
-              <Button type="button" variant="ghost" asChild>
-                <Link href="/dashboard/faturamento">Limpar</Link>
-              </Button>
-            </div>
-          </form>
+            </form>
+          </div>
         </CardContent>
       </Card>
 

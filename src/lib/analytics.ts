@@ -320,29 +320,33 @@ export type RevenueStats = {
 }
 
 export async function getRevenueStats(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  range?: DateRange
 ): Promise<RevenueStats> {
-  const { data: paid } = await supabase
-    .from('purchases')
-    .select('valor')
-    .eq('status', 'paid')
+  const { data: paid } = await inRange(
+    supabase.from('purchases').select('valor').eq('status', 'paid'),
+    range
+  )
   const revenue = (paid ?? []).reduce((s, r) => s + (Number(r.valor) || 0), 0)
   const paidCount = paid?.length ?? 0
 
-  const { data: refunded } = await supabase
-    .from('purchases')
-    .select('valor')
-    .in('status', ['refunded', 'chargedback'])
+  const { data: refunded } = await inRange(
+    supabase
+      .from('purchases')
+      .select('valor')
+      .in('status', ['refunded', 'chargedback']),
+    range
+  )
   const refundedAmount = (refunded ?? []).reduce(
     (s, r) => s + (Number(r.valor) || 0),
     0
   )
 
   // Pendentes: aguardando pagamento (Pix/boleto gerado, ainda não pago).
-  const { data: pending } = await supabase
-    .from('purchases')
-    .select('valor')
-    .eq('status', 'unpaid')
+  const { data: pending } = await inRange(
+    supabase.from('purchases').select('valor').eq('status', 'unpaid'),
+    range
+  )
   const pendingAmount = (pending ?? []).reduce(
     (s, r) => s + (Number(r.valor) || 0),
     0
