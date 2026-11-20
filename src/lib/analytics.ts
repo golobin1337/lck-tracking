@@ -265,6 +265,8 @@ export type RevenueStats = {
   avgTicket: number
   refundedCount: number
   refundedAmount: number
+  pendingCount: number
+  pendingAmount: number
 }
 
 export async function getRevenueStats(
@@ -286,11 +288,23 @@ export async function getRevenueStats(
     0
   )
 
+  // Pendentes: aguardando pagamento (Pix/boleto gerado, ainda não pago).
+  const { data: pending } = await supabase
+    .from('purchases')
+    .select('valor')
+    .eq('status', 'unpaid')
+  const pendingAmount = (pending ?? []).reduce(
+    (s, r) => s + (Number(r.valor) || 0),
+    0
+  )
+
   return {
     revenue,
     paidCount,
     avgTicket: paidCount > 0 ? revenue / paidCount : 0,
     refundedCount: refunded?.length ?? 0,
     refundedAmount,
+    pendingCount: pending?.length ?? 0,
+    pendingAmount,
   }
 }

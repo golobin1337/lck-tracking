@@ -114,13 +114,43 @@ export default async function FaturamentoPage(props: {
         />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Vendas por pagamento</CardTitle>
           </CardHeader>
           <CardContent>
             <PaymentDonut data={payments} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Vendas pendentes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-baseline gap-2">
+              <span className="tabular text-4xl font-bold text-amber">
+                {formatNumber(stats.pendingCount)}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                aguardando pagamento
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Valor em aberto:{' '}
+              <span className="font-semibold text-foreground">
+                {formatCurrency(stats.pendingAmount)}
+              </span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Pix/boleto gerados que ainda não foram pagos.
+            </p>
+            <Button variant="outline" size="sm" asChild className="mt-4">
+              <Link href="/dashboard/faturamento?status=unpaid">
+                Ver pendentes
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
