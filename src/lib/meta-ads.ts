@@ -214,6 +214,63 @@ export async function getAdSpendTotal(
   return total
 }
 
+// ---- Gasto por hora do dia (0..23) via breakdown da Meta ----
+const hourlyCache = new Map<
+  string,
+  { hours: number[]; fetchedAt: number }
+>()
+
+async function fetchAdSpendByHourAccount(
+  account: { id: string; ad_account_id: string; token: string },
+  since: string,
+  until: string
+): Promise<number[]> {
+  const key = `${account.id}:${since}:${until}:hourly`
+  const now = Date.now()
+  const entry = hourlyCache.get(key)
+  if (entry && now - entry.fetchedAt < AD_INSIGHTS_TTL_MS) return entry.hours
+
+  const timeRange = encodeURIComponent(JSON.stringify({ since, until }))
+  const url =
+    `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${normalizeAccountId(
+      account.ad_account_id
+    )}/insights` +
+    `?level=account&fields=spend` +
+    `&breakdowns=hourly_stats_aggregated_by_advertiser_time_zone` +
+    `&time_range=${timeRange}&access_token=${encodeURIComponent(account.token)}`
+
+  const hours = new Array(24).fill(0)
+  try {
+    const res = await fetch(url)
+    const body = await res.json().catch(() => null)
+    if (!res.ok) return entry?.hours ?? hours
+    for (const r of body?.data ?? []) {
+      const slot = String(
+        r.hourly_stats_aggregated_by_advertiser_time_zone ?? ''
+      )
+      const h = parseInt(slot.slice(0, 2), 10)
+      if (h >= 0 && h < 24) hours[h] += Number(r.spend) || 0
+    }
+    hourlyCache.set(key, { hours, fetchedAt: now })
+    return hours
+  } catch {
+    return entry?.hours ?? hours
+  }
+}
+
+export async function getAdSpendByHour(
+  accounts: { id: string; ad_account_id: string; token: string }[],
+  since: string,
+  until: string
+): Promise<number[]> {
+  const total = new Array(24).fill(0)
+  for (const acc of accounts) {
+    const h = await fetchAdSpendByHourAccount(acc, since, until)
+    for (let i = 0; i < 24; i++) total[i] += h[i]
+  }
+  return total
+}
+
 // ---- Agregação em árvore campanha → conjunto → anúncio ----
 export type AdNode = {
   id: string

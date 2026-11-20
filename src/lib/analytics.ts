@@ -259,6 +259,39 @@ export async function getPaymentBreakdown(
   ]
 }
 
+export type HourBucket = {
+  hour: number
+  label: string
+  count: number
+  revenue: number
+}
+
+// Compras pagas agrupadas por hora do dia (no fuso do usuário).
+export async function getSalesByHour(
+  supabase: SupabaseClient,
+  range?: DateRange
+): Promise<HourBucket[]> {
+  const tz = range?.tz ?? 0
+  const { data } = await inRange(
+    supabase.from('purchases').select('created_at, valor').eq('status', 'paid'),
+    range
+  )
+  const buckets: HourBucket[] = Array.from({ length: 24 }, (_, h) => ({
+    hour: h,
+    label: `${String(h).padStart(2, '0')}:00`,
+    count: 0,
+    revenue: 0,
+  }))
+  for (const r of data ?? []) {
+    const h = new Date(
+      new Date(r.created_at).getTime() - tz * 60000
+    ).getUTCHours()
+    buckets[h].count++
+    buckets[h].revenue += Number(r.valor) || 0
+  }
+  return buckets
+}
+
 export type ProductSlice = { produto: string; revenue: number; pct: number }
 
 // Receita das compras pagas agrupada por produto (maior → menor).

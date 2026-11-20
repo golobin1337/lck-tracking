@@ -14,6 +14,7 @@ import {
   getPaymentBreakdown,
   getApprovalRates,
   getProductBreakdown,
+  getSalesByHour,
   type DateRange,
 } from '@/lib/analytics'
 import {
@@ -26,12 +27,15 @@ import { StatCard } from '@/components/dashboard/stat-card'
 import { PaymentDonut } from '@/components/dashboard/payment-donut'
 import { ApprovalRates } from '@/components/dashboard/approval-rates'
 import { ProductSales } from '@/components/dashboard/product-sales'
+import { SalesByHour } from '@/components/dashboard/sales-by-hour'
+import { ProfitByHour } from '@/components/dashboard/profit-by-hour'
 import { OverviewFilter } from '@/components/dashboard/overview-filter'
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -41,28 +45,31 @@ import {
 } from '@/components/dashboard/purchases-table'
 import { getOwnerUserId } from '@/lib/owner'
 import { getActiveAdAccounts } from '@/lib/destinations'
-import { getAdSpendTotal } from '@/lib/meta-ads'
+import { getAdSpendTotal, getAdSpendByHour } from '@/lib/meta-ads'
 import { formatCurrency, formatNumber, cn } from '@/lib/utils'
 
 const PAGE_SIZE = 50
 
-// Gasto total em anúncios no período para o ROI. 0 se Meta não conectado.
-async function getTotalAdSpend(range: DateRange): Promise<number> {
+// Gasto em anúncios no período (total + por hora). 0/zeros se Meta não conectado.
+async function getAdSpend(
+  range: DateRange
+): Promise<{ total: number; byHour: number[] }> {
+  const zeros = { total: 0, byHour: new Array(24).fill(0) }
   const ownerId = await getOwnerUserId()
-  if (!ownerId) return 0
+  if (!ownerId) return zeros
   const accounts = await getActiveAdAccounts(ownerId)
-  if (!accounts.length) return 0
+  if (!accounts.length) return zeros
   const tz = range.tz ?? 0
   const localDate = (iso: string) =>
     new Date(new Date(iso).getTime() - tz * 60000).toISOString().slice(0, 10)
   try {
-    return await getAdSpendTotal(
-      accounts,
-      localDate(range.from),
-      localDate(range.to)
-    )
+    const [total, byHour] = await Promise.all([
+      getAdSpendTotal(accounts, localDate(range.from), localDate(range.to)),
+      getAdSpendByHour(accounts, localDate(range.from), localDate(range.to)),
+    ])
+    return { total, byHour }
   } catch {
-    return 0
+    return zeros
   }
 }
 
@@ -88,19 +95,28 @@ export default async function FaturamentoPage(props: {
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
   const supabase = await createClient()
 
-  const [stats, payments, approval, products, adSpend] = await Promise.all([
-    getRevenueStats(supabase, range),
-    getPaymentBreakdown(supabase, range),
-    getApprovalRates(supabase, range),
-    getProductBreakdown(supabase, range),
-    getTotalAdSpend(range),
-  ])
+  const [stats, payments, approval, products, salesByHour, spend] =
+    await Promise.all([
+      getRevenueStats(supabase, range),
+      getPaymentBreakdown(supabase, range),
+      getApprovalRates(supabase, range),
+      getProductBreakdown(supabase, range),
+      getSalesByHour(supabase, range),
+      getAdSpend(range),
+    ])
 
+  const adSpend = spend.total
   const profit = stats.revenue - adSpend
   const roiPct = adSpend > 0 ? (profit / adSpend) * 100 : null
   const roas = adSpend > 0 ? stats.revenue / adSpend : null
   const cpa =
     adSpend > 0 && stats.paidCount > 0 ? adSpend / stats.paidCount : null
+
+  // Lucro por hora = receita da hora − gasto da hora.
+  const profitByHour = salesByHour.map((b) => ({
+    label: b.label,
+    profit: b.revenue - (spend.byHour[b.hour] ?? 0),
+  }))
 
   let query = supabase
     .from('purchases')
@@ -314,6 +330,29 @@ export default async function FaturamentoPage(props: {
           </CardHeader>
           <CardContent>
             <ProductSales data={products} />
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2 lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="text-base">Vendas por horário</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SalesByHour data={salesByHour} />
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2 lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="text-base">Lucro por horário</CardTitle>
+            <CardDescription>
+              {adSpend > 0
+                ? 'Receita da hora menos o gasto em anúncios da hora.'
+                : 'Mostrando a receita por hora. Conecte o Meta Ads para ver o lucro/prejuízo real (com o gasto por hora).'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ProfitByHour data={profitByHour} />
           </CardContent>
         </Card>
       </div>
