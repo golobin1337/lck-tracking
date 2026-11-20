@@ -13,6 +13,29 @@ export const AD_INSIGHTS_TTL_MS = 30 * 60_000
 // Piso rígido entre chamadas reais à Meta por conta, mesmo em refresh manual.
 const MIN_REFRESH_MS = 5 * 60_000
 
+// Timeout + "circuit breaker": a chamada à Meta nunca pode travar a navegação.
+// Se a Meta falhar (ex.: token bloqueado), paramos de chamar por 5 min.
+const META_TIMEOUT_MS = 4000
+let metaDownUntil = 0
+function metaIsDown(): boolean {
+  return Date.now() < metaDownUntil
+}
+function markMetaDown(): void {
+  metaDownUntil = Date.now() + 5 * 60_000
+}
+function markMetaUp(): void {
+  metaDownUntil = 0
+}
+async function metaFetch(url: string): Promise<Response> {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), META_TIMEOUT_MS)
+  try {
+    return await fetch(url, { signal: ctrl.signal })
+  } finally {
+    clearTimeout(t)
+  }
+}
+
 export type AdInsightRow = {
   campaign_id: string
   campaign_name: string
@@ -84,6 +107,17 @@ export async function fetchAdInsights(
     }
   }
 
+  // Meta fora do ar recentemente → não chama (resposta instantânea).
+  if (metaIsDown()) {
+    return {
+      rows: entry?.rows ?? [],
+      fetchedAt: entry?.fetchedAt ?? now,
+      cached: true,
+      throttled: false,
+      error: entry?.error ?? 'meta_down',
+    }
+  }
+
   const fields =
     'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks'
   const url =
@@ -94,9 +128,10 @@ export async function fetchAdInsights(
     `&access_token=${encodeURIComponent(account.token)}`
 
   try {
-    const res = await fetch(url)
+    const res = await metaFetch(url)
     const body = await res.json().catch(() => null)
     if (!res.ok) {
+      markMetaDown()
       const msg =
         body?.error?.message || `HTTP ${res.status}`
       const fallback = entry?.rows ?? []
@@ -108,6 +143,7 @@ export async function fetchAdInsights(
       cache.set(key, result)
       return { ...result, cached: false, throttled: false }
     }
+    markMetaUp()
 
     const rows: AdInsightRow[] = (body?.data ?? []).map(
       (r: Record<string, unknown>) => ({
@@ -126,6 +162,7 @@ export async function fetchAdInsights(
     cache.set(key, result)
     return { ...result, cached: false, throttled: false }
   } catch (err) {
+    markMetaDown()
     const msg = err instanceof Error ? err.message : String(err)
     const fallback = entry?.rows ?? []
     const result: CacheEntry = { rows: fallback, fetchedAt: now, error: msg }
@@ -153,6 +190,14 @@ export async function fetchAdTotals(
   if (entry && now - entry.fetchedAt < AD_INSIGHTS_TTL_MS) {
     return { clicks: entry.clicks, spend: entry.spend, error: entry.error }
   }
+  // Meta fora do ar recentemente → não chama (resposta instantânea).
+  if (metaIsDown()) {
+    return {
+      clicks: entry?.clicks ?? 0,
+      spend: entry?.spend ?? 0,
+      error: 'meta_down',
+    }
+  }
 
   const timeRange = encodeURIComponent(JSON.stringify({ since, until }))
   const url =
@@ -163,21 +208,24 @@ export async function fetchAdTotals(
     `&access_token=${encodeURIComponent(account.token)}`
 
   try {
-    const res = await fetch(url)
+    const res = await metaFetch(url)
     const body = await res.json().catch(() => null)
     if (!res.ok) {
+      markMetaDown()
       const msg = body?.error?.message || `HTTP ${res.status}`
       const clicks = entry?.clicks ?? 0
       const spend = entry?.spend ?? 0
       totalsCache.set(key, { clicks, spend, fetchedAt: now, error: msg })
       return { clicks, spend, error: msg }
     }
+    markMetaUp()
     const rows: Record<string, unknown>[] = body?.data ?? []
     const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0)
     const spend = rows.reduce((s, r) => s + Number(r.spend ?? 0), 0)
     totalsCache.set(key, { clicks, spend, fetchedAt: now, error: null })
     return { clicks, spend, error: null }
   } catch (err) {
+    markMetaDown()
     const msg = err instanceof Error ? err.message : String(err)
     const clicks = entry?.clicks ?? 0
     const spend = entry?.spend ?? 0
@@ -230,6 +278,9 @@ async function fetchAdSpendByHourAccount(
   const entry = hourlyCache.get(key)
   if (entry && now - entry.fetchedAt < AD_INSIGHTS_TTL_MS) return entry.hours
 
+  const hours = new Array(24).fill(0)
+  if (metaIsDown()) return entry?.hours ?? hours
+
   const timeRange = encodeURIComponent(JSON.stringify({ since, until }))
   const url =
     `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${normalizeAccountId(
@@ -239,11 +290,15 @@ async function fetchAdSpendByHourAccount(
     `&breakdowns=hourly_stats_aggregated_by_advertiser_time_zone` +
     `&time_range=${timeRange}&access_token=${encodeURIComponent(account.token)}`
 
-  const hours = new Array(24).fill(0)
   try {
-    const res = await fetch(url)
+    const res = await metaFetch(url)
     const body = await res.json().catch(() => null)
-    if (!res.ok) return entry?.hours ?? hours
+    if (!res.ok) {
+      markMetaDown()
+      hourlyCache.set(key, { hours, fetchedAt: now }) // cacheia zeros no erro
+      return hours
+    }
+    markMetaUp()
     for (const r of body?.data ?? []) {
       const slot = String(
         r.hourly_stats_aggregated_by_advertiser_time_zone ?? ''
@@ -254,7 +309,9 @@ async function fetchAdSpendByHourAccount(
     hourlyCache.set(key, { hours, fetchedAt: now })
     return hours
   } catch {
-    return entry?.hours ?? hours
+    markMetaDown()
+    hourlyCache.set(key, { hours, fetchedAt: now })
+    return hours
   }
 }
 
