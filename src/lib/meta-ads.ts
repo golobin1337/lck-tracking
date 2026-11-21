@@ -137,9 +137,9 @@ export async function fetchAdInsights(
     const res = await metaFetch(url)
     const body = await res.json().catch(() => null)
     if (!res.ok) {
-      const msg =
-        body?.error?.message || `HTTP ${res.status}`
-      markMetaDown(msg)
+      // Erro rápido (ex.: conta bloqueada) → NÃO trava o breaker (é por-conta).
+      const msg = body?.error?.message || `HTTP ${res.status}`
+      lastMetaError = msg
       const fallback = entry?.rows ?? []
       const result: CacheEntry = {
         rows: fallback,
@@ -217,8 +217,9 @@ export async function fetchAdTotals(
     const res = await metaFetch(url)
     const body = await res.json().catch(() => null)
     if (!res.ok) {
+      // Erro rápido por-conta (ex.: bloqueada) → não trava o breaker global.
       const msg = body?.error?.message || `HTTP ${res.status}`
-      markMetaDown(msg)
+      lastMetaError = msg
       const clicks = entry?.clicks ?? 0
       const spend = entry?.spend ?? 0
       totalsCache.set(key, { clicks, spend, fetchedAt: now, error: msg })
@@ -246,12 +247,10 @@ export async function getAdClicksTotal(
   since: string,
   until: string
 ): Promise<number> {
-  let total = 0
-  for (const acc of accounts) {
-    const { clicks } = await fetchAdTotals(acc, since, until)
-    total += clicks
-  }
-  return total
+  const results = await Promise.all(
+    accounts.map((acc) => fetchAdTotals(acc, since, until))
+  )
+  return results.reduce((s, r) => s + r.clicks, 0)
 }
 
 // Soma o gasto (investimento) de todas as contas ativas no período.
@@ -260,12 +259,10 @@ export async function getAdSpendTotal(
   since: string,
   until: string
 ): Promise<number> {
-  let total = 0
-  for (const acc of accounts) {
-    const { spend } = await fetchAdTotals(acc, since, until)
-    total += spend
-  }
-  return total
+  const results = await Promise.all(
+    accounts.map((acc) => fetchAdTotals(acc, since, until))
+  )
+  return results.reduce((s, r) => s + r.spend, 0)
 }
 
 // ---- Gasto por hora do dia (0..23) via breakdown da Meta ----
@@ -300,7 +297,8 @@ async function fetchAdSpendByHourAccount(
     const res = await metaFetch(url)
     const body = await res.json().catch(() => null)
     if (!res.ok) {
-      markMetaDown(body?.error?.message || `HTTP ${res.status}`)
+      // Erro rápido por-conta → não trava o breaker global.
+      lastMetaError = body?.error?.message || `HTTP ${res.status}`
       hourlyCache.set(key, { hours, fetchedAt: now }) // cacheia zeros no erro
       return hours
     }
@@ -326,11 +324,11 @@ export async function getAdSpendByHour(
   since: string,
   until: string
 ): Promise<number[]> {
+  const arrs = await Promise.all(
+    accounts.map((acc) => fetchAdSpendByHourAccount(acc, since, until))
+  )
   const total = new Array(24).fill(0)
-  for (const acc of accounts) {
-    const h = await fetchAdSpendByHourAccount(acc, since, until)
-    for (let i = 0; i < 24; i++) total[i] += h[i]
-  }
+  for (const h of arrs) for (let i = 0; i < 24; i++) total[i] += h[i]
   return total
 }
 

@@ -74,17 +74,21 @@ export default async function CampanhasPage(props: {
 
   const revByCamp = await getRevenueByCampaign(supabase, offerId)
 
+  const results = await Promise.all(
+    toQuery.map((acc) =>
+      fetchAdInsights(
+        { id: acc.id, ad_account_id: acc.ad_account_id, token: acc.token },
+        preset,
+        force
+      )
+    )
+  )
   let rows: AdInsightRow[] = []
   let fetchedAt = 0
   let error: string | null = null
   let allCached = true
   let throttled = false
-  for (const acc of toQuery) {
-    const r = await fetchAdInsights(
-      { id: acc.id, ad_account_id: acc.ad_account_id, token: acc.token },
-      preset,
-      force
-    )
+  for (const r of results) {
     rows = rows.concat(r.rows)
     fetchedAt = Math.max(fetchedAt, r.fetchedAt)
     if (r.error) error = r.error
