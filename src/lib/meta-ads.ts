@@ -42,6 +42,31 @@ async function metaFetch(url: string): Promise<Response> {
   }
 }
 
+// ---- Câmbio: converte o gasto de contas em moeda estrangeira para BRL ----
+// (ex.: contas em USD). Cotação cacheada por 1h via AwesomeAPI (BRL).
+const fxCache = new Map<string, { rate: number; fetchedAt: number }>()
+async function fxToBrl(currency?: string): Promise<number> {
+  const cur = (currency || 'BRL').toUpperCase()
+  if (cur === 'BRL') return 1
+  const now = Date.now()
+  const cached = fxCache.get(cur)
+  if (cached && now - cached.fetchedAt < 60 * 60_000) return cached.rate
+  try {
+    const r = await fetch(
+      `https://economia.awesomeapi.com.br/last/${cur}-BRL`
+    )
+    const b = await r.json().catch(() => null)
+    const rate = Number(b?.[`${cur}BRL`]?.bid)
+    if (rate && rate > 0) {
+      fxCache.set(cur, { rate, fetchedAt: now })
+      return rate
+    }
+  } catch {
+    /* usa fallback abaixo */
+  }
+  return cached?.rate ?? (cur === 'USD' ? 5.5 : 1)
+}
+
 export type AdInsightRow = {
   campaign_id: string
   campaign_name: string
@@ -125,7 +150,7 @@ export async function fetchAdInsights(
   }
 
   const fields =
-    'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks'
+    'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,account_currency'
   const url =
     `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${normalizeAccountId(
       account.ad_account_id
@@ -151,19 +176,19 @@ export async function fetchAdInsights(
     }
     markMetaUp()
 
-    const rows: AdInsightRow[] = (body?.data ?? []).map(
-      (r: Record<string, unknown>) => ({
-        campaign_id: String(r.campaign_id ?? ''),
-        campaign_name: String(r.campaign_name ?? '—'),
-        adset_id: String(r.adset_id ?? ''),
-        adset_name: String(r.adset_name ?? '—'),
-        ad_id: String(r.ad_id ?? ''),
-        ad_name: String(r.ad_name ?? '—'),
-        spend: Number(r.spend ?? 0),
-        impressions: Number(r.impressions ?? 0),
-        clicks: Number(r.clicks ?? 0),
-      })
-    )
+    const data: Record<string, unknown>[] = body?.data ?? []
+    const rate = await fxToBrl(data[0]?.account_currency as string)
+    const rows: AdInsightRow[] = data.map((r) => ({
+      campaign_id: String(r.campaign_id ?? ''),
+      campaign_name: String(r.campaign_name ?? '—'),
+      adset_id: String(r.adset_id ?? ''),
+      adset_name: String(r.adset_name ?? '—'),
+      ad_id: String(r.ad_id ?? ''),
+      ad_name: String(r.ad_name ?? '—'),
+      spend: Number(r.spend ?? 0) * rate,
+      impressions: Number(r.impressions ?? 0),
+      clicks: Number(r.clicks ?? 0),
+    }))
     const result: CacheEntry = { rows, fetchedAt: now, error: null }
     cache.set(key, result)
     return { ...result, cached: false, throttled: false }
@@ -210,7 +235,7 @@ export async function fetchAdTotals(
     `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${normalizeAccountId(
       account.ad_account_id
     )}/insights` +
-    `?level=account&fields=clicks,spend&time_range=${timeRange}` +
+    `?level=account&fields=clicks,spend,account_currency&time_range=${timeRange}` +
     `&access_token=${encodeURIComponent(account.token)}`
 
   try {
@@ -227,8 +252,9 @@ export async function fetchAdTotals(
     }
     markMetaUp()
     const rows: Record<string, unknown>[] = body?.data ?? []
+    const rate = await fxToBrl(rows[0]?.account_currency as string)
     const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0)
-    const spend = rows.reduce((s, r) => s + Number(r.spend ?? 0), 0)
+    const spend = rows.reduce((s, r) => s + Number(r.spend ?? 0), 0) * rate
     totalsCache.set(key, { clicks, spend, fetchedAt: now, error: null })
     return { clicks, spend, error: null }
   } catch (err) {
@@ -289,7 +315,7 @@ async function fetchAdSpendByHourAccount(
     `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${normalizeAccountId(
       account.ad_account_id
     )}/insights` +
-    `?level=account&fields=spend` +
+    `?level=account&fields=spend,account_currency` +
     `&breakdowns=hourly_stats_aggregated_by_advertiser_time_zone` +
     `&time_range=${timeRange}&access_token=${encodeURIComponent(account.token)}`
 
@@ -303,12 +329,14 @@ async function fetchAdSpendByHourAccount(
       return hours
     }
     markMetaUp()
-    for (const r of body?.data ?? []) {
+    const rowsH: Record<string, unknown>[] = body?.data ?? []
+    const rateH = await fxToBrl(rowsH[0]?.account_currency as string)
+    for (const r of rowsH) {
       const slot = String(
         r.hourly_stats_aggregated_by_advertiser_time_zone ?? ''
       )
       const h = parseInt(slot.slice(0, 2), 10)
-      if (h >= 0 && h < 24) hours[h] += Number(r.spend) || 0
+      if (h >= 0 && h < 24) hours[h] += (Number(r.spend) || 0) * rateH
     }
     hourlyCache.set(key, { hours, fetchedAt: now })
     return hours
