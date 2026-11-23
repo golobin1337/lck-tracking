@@ -204,13 +204,15 @@ export function extractMetaId(s?: string | null): string | null {
 export async function getRevenueByMetaId(
   supabase: SupabaseClient,
   column: 'utm_campaign' | 'utm_medium' | 'utm_content',
-  offerId?: string | null
+  offerId?: string | null,
+  range?: { from: string; to: string }
 ): Promise<Map<string, { revenue: number; count: number }>> {
   let q = supabase
     .from('purchases')
     .select(`valor, ${column}`)
     .eq('status', 'paid')
   if (offerId) q = q.eq('offer_id', offerId)
+  if (range) q = q.gte('created_at', range.from).lte('created_at', range.to)
   const { data } = await q
   const map = new Map<string, { revenue: number; count: number }>()
   for (const r of (data ?? []) as Record<string, unknown>[]) {
@@ -227,13 +229,15 @@ export async function getRevenueByMetaId(
 export async function getCheckoutByMetaId(
   supabase: SupabaseClient,
   column: 'utm_campaign' | 'utm_medium' | 'utm_content',
-  offerId?: string | null
+  offerId?: string | null,
+  range?: { from: string; to: string }
 ): Promise<Map<string, number>> {
   let q = supabase
     .from('events_log')
     .select(column)
     .eq('event_name', 'InitiateCheckout')
   if (offerId) q = q.eq('offer_id', offerId)
+  if (range) q = q.gte('created_at', range.from).lte('created_at', range.to)
   const { data } = await q
   const map = new Map<string, number>()
   for (const r of (data ?? []) as Record<string, unknown>[]) {

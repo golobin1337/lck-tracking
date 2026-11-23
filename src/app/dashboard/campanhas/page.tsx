@@ -37,6 +37,48 @@ const LEVELS: { value: Level; label: string; column: 'utm_campaign' | 'utm_mediu
   { value: 'ad', label: 'Anúncios', column: 'utm_content' },
 ]
 
+// Converte o date_preset do Meta num intervalo de datas (BRT, UTC-3) para
+// filtrar a receita/vendas e alinhar com o gasto do período.
+const BRT = 180
+function presetRange(preset: DatePreset): { from: string; to: string } {
+  const now = new Date()
+  const local = new Date(now.getTime() - BRT * 60000)
+  const y = local.getUTCFullYear()
+  const m = local.getUTCMonth()
+  const d = local.getUTCDate()
+  const startOf = (yy: number, mm: number, dd: number) =>
+    new Date(Date.UTC(yy, mm, dd) + BRT * 60000)
+  const endOf = (yy: number, mm: number, dd: number) =>
+    new Date(Date.UTC(yy, mm, dd, 23, 59, 59, 999) + BRT * 60000)
+  let from: Date
+  let to: Date = now
+  switch (preset) {
+    case 'today':
+      from = startOf(y, m, d)
+      break
+    case 'yesterday':
+      from = startOf(y, m, d - 1)
+      to = endOf(y, m, d - 1)
+      break
+    case 'last_7d':
+      from = startOf(y, m, d - 6)
+      break
+    case 'last_14d':
+      from = startOf(y, m, d - 13)
+      break
+    case 'this_month':
+      from = startOf(y, m, 1)
+      break
+    case 'last_month':
+      from = startOf(y, m - 1, 1)
+      to = endOf(y, m, 0)
+      break
+    default: // last_30d
+      from = startOf(y, m, d - 29)
+  }
+  return { from: from.toISOString(), to: to.toISOString() }
+}
+
 const PRESETS: { value: DatePreset; label: string }[] = [
   { value: 'today', label: 'Hoje' },
   { value: 'yesterday', label: 'Ontem' },
@@ -92,14 +134,17 @@ export default async function CampanhasPage(props: {
   const toQuery =
     selected === 'all' ? accounts : accounts.filter((a) => a.id === selected)
 
+  const range = presetRange(preset)
   const [revById, icById, paidCountRes] = await Promise.all([
-    getRevenueByMetaId(supabase, levelCfg.column, offerId),
-    getCheckoutByMetaId(supabase, levelCfg.column, offerId),
+    getRevenueByMetaId(supabase, levelCfg.column, offerId, range),
+    getCheckoutByMetaId(supabase, levelCfg.column, offerId, range),
     (() => {
       let q = supabase
         .from('purchases')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'paid')
+        .gte('created_at', range.from)
+        .lte('created_at', range.to)
       if (offerId) q = q.eq('offer_id', offerId)
       return q
     })(),
