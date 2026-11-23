@@ -187,6 +187,63 @@ export async function getRevenueByCampaign(
   return map
 }
 
+// Extrai o ID do Meta de um UTM no formato UTMify ("nome|<id>::<fbclid>::").
+export function extractMetaId(s?: string | null): string | null {
+  if (!s) return null
+  let p = String(s)
+  const pipe = p.lastIndexOf('|')
+  if (pipe >= 0) p = p.slice(pipe + 1)
+  const colon = p.indexOf('::')
+  if (colon >= 0) p = p.slice(0, colon)
+  p = p.trim()
+  return /^\d{5,}$/.test(p) ? p : null
+}
+
+// Receita + nº de vendas por ID do Meta (campanha/conjunto/anúncio), lendo o UTM
+// correspondente (utm_campaign / utm_medium / utm_content).
+export async function getRevenueByMetaId(
+  supabase: SupabaseClient,
+  column: 'utm_campaign' | 'utm_medium' | 'utm_content',
+  offerId?: string | null
+): Promise<Map<string, { revenue: number; count: number }>> {
+  let q = supabase
+    .from('purchases')
+    .select(`valor, ${column}`)
+    .eq('status', 'paid')
+  if (offerId) q = q.eq('offer_id', offerId)
+  const { data } = await q
+  const map = new Map<string, { revenue: number; count: number }>()
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const id = extractMetaId(r[column] as string)
+    if (!id) continue
+    const cur = map.get(id) ?? { revenue: 0, count: 0 }
+    cur.revenue += Number(r.valor) || 0
+    cur.count += 1
+    map.set(id, cur)
+  }
+  return map
+}
+
+export async function getCheckoutByMetaId(
+  supabase: SupabaseClient,
+  column: 'utm_campaign' | 'utm_medium' | 'utm_content',
+  offerId?: string | null
+): Promise<Map<string, number>> {
+  let q = supabase
+    .from('events_log')
+    .select(column)
+    .eq('event_name', 'InitiateCheckout')
+  if (offerId) q = q.eq('offer_id', offerId)
+  const { data } = await q
+  const map = new Map<string, number>()
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const id = extractMetaId(r[column] as string)
+    if (!id) continue
+    map.set(id, (map.get(id) ?? 0) + 1)
+  }
+  return map
+}
+
 // Nº de InitiateCheckout por utm_campaign (chave minúscula) — para a aba Campanhas.
 export async function getCheckoutByCampaign(
   supabase: SupabaseClient,

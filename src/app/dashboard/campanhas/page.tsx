@@ -3,10 +3,9 @@ import { DollarSign, TrendingUp, Target, RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentOfferId } from '@/lib/offers'
 import { getActiveAdAccounts } from '@/lib/destinations'
-import { getRevenueByCampaign, getCheckoutByCampaign } from '@/lib/analytics'
+import { getRevenueByMetaId, getCheckoutByMetaId } from '@/lib/analytics'
 import {
   fetchAdInsights,
-  buildCampaignTree,
   getCampaignMeta,
   type AdInsightRow,
   type DatePreset,
@@ -23,7 +22,20 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { formatCurrency } from '@/lib/utils'
 
-type SP = { account?: string; preset?: string; refresh?: string; q?: string }
+type SP = {
+  account?: string
+  preset?: string
+  refresh?: string
+  q?: string
+  level?: string
+}
+
+type Level = 'campaign' | 'adset' | 'ad'
+const LEVELS: { value: Level; label: string; column: 'utm_campaign' | 'utm_medium' | 'utm_content' }[] = [
+  { value: 'campaign', label: 'Campanhas', column: 'utm_campaign' },
+  { value: 'adset', label: 'Conjuntos', column: 'utm_medium' },
+  { value: 'ad', label: 'Anúncios', column: 'utm_content' },
+]
 
 const PRESETS: { value: DatePreset; label: string }[] = [
   { value: 'today', label: 'Hoje' },
@@ -49,6 +61,9 @@ export default async function CampanhasPage(props: {
   const preset = (sp.preset as DatePreset) || 'last_30d'
   const selected = sp.account && sp.account !== 'all' ? sp.account : 'all'
   const force = sp.refresh === '1'
+  const levelCfg =
+    LEVELS.find((l) => l.value === sp.level) ?? LEVELS[0]
+  const level = levelCfg.value
 
   // Estado vazio: nenhuma conta configurada.
   if (accounts.length === 0) {
@@ -77,9 +92,9 @@ export default async function CampanhasPage(props: {
   const toQuery =
     selected === 'all' ? accounts : accounts.filter((a) => a.id === selected)
 
-  const [revByCamp, icByCamp, paidCountRes] = await Promise.all([
-    getRevenueByCampaign(supabase, offerId),
-    getCheckoutByCampaign(supabase, offerId),
+  const [revById, icById, paidCountRes] = await Promise.all([
+    getRevenueByMetaId(supabase, levelCfg.column, offerId),
+    getCheckoutByMetaId(supabase, levelCfg.column, offerId),
     (() => {
       let q = supabase
         .from('purchases')
@@ -121,32 +136,60 @@ export default async function CampanhasPage(props: {
     throttled = throttled || r.throttled
   }
 
-  const tree = buildCampaignTree(rows, revByCamp)
-  let flatRows: FlatCampaign[] = tree.map((c) => ({
-    id: c.id,
-    name: c.name,
-    status: campMeta[c.id]?.status ?? '',
-    budget: campMeta[c.id]?.budget ?? null,
-    spend: c.spend,
-    revenue: c.revenue,
-    sales: c.purchases,
-    clicks: c.clicks,
-    ic: icByCamp.get(c.name.toLowerCase()) ?? 0,
-  }))
+  // Agrega os insights (nível anúncio) pelo nível selecionado (id).
+  const groups = new Map<
+    string,
+    { id: string; name: string; spend: number; clicks: number }
+  >()
+  for (const r of rows) {
+    const id =
+      level === 'campaign'
+        ? r.campaign_id
+        : level === 'adset'
+          ? r.adset_id
+          : r.ad_id
+    const name =
+      level === 'campaign'
+        ? r.campaign_name
+        : level === 'adset'
+          ? r.adset_name
+          : r.ad_name
+    if (!id) continue
+    const e = groups.get(id) ?? { id, name, spend: 0, clicks: 0 }
+    e.spend += r.spend
+    e.clicks += r.clicks
+    groups.set(id, e)
+  }
+
+  let flatRows: FlatCampaign[] = [...groups.values()].map((g) => {
+    const rev = revById.get(g.id)
+    return {
+      id: g.id,
+      name: g.name,
+      status: level === 'campaign' ? campMeta[g.id]?.status ?? '' : '',
+      budget: level === 'campaign' ? campMeta[g.id]?.budget ?? null : null,
+      spend: g.spend,
+      clicks: g.clicks,
+      revenue: rev?.revenue ?? 0,
+      sales: rev?.count ?? 0,
+      ic: icById.get(g.id) ?? 0,
+    }
+  })
   const q = (sp.q ?? '').trim().toLowerCase()
   if (q) flatRows = flatRows.filter((r) => r.name.toLowerCase().includes(q))
 
-  const totalSpend = tree.reduce((s, c) => s + c.spend, 0)
-  const totalRevenue = tree.reduce((s, c) => s + c.revenue, 0)
-  const totalPurchases = tree.reduce((s, c) => s + c.purchases, 0)
+  const totalSpend = flatRows.reduce((s, r) => s + r.spend, 0)
+  const totalRevenue = flatRows.reduce((s, r) => s + r.revenue, 0)
+  const totalSales = flatRows.reduce((s, r) => s + r.sales, 0)
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : null
-  const cpa = totalPurchases > 0 ? totalSpend / totalPurchases : null
-  const untracked = Math.max(0, (paidCountRes.count ?? 0) - totalPurchases)
+  const cpa = totalSales > 0 ? totalSpend / totalSales : null
+  const untracked = Math.max(0, (paidCountRes.count ?? 0) - totalSales)
 
   const hrefWith = (patch: Partial<SP>) => {
     const params = new URLSearchParams()
     params.set('account', patch.account ?? selected)
     params.set('preset', patch.preset ?? preset)
+    params.set('level', patch.level ?? level)
     if (sp.q) params.set('q', sp.q)
     if (patch.refresh) params.set('refresh', '1')
     return `/dashboard/campanhas?${params.toString()}`
@@ -178,12 +221,30 @@ export default async function CampanhasPage(props: {
         </Button>
       </PageHeader>
 
+      {/* Abas por nível */}
+      <div className="mb-4 flex gap-1 border-b border-border">
+        {LEVELS.map((l) => (
+          <Link
+            key={l.value}
+            href={hrefWith({ level: l.value })}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+              level === l.value
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {l.label}
+          </Link>
+        ))}
+      </div>
+
       {/* Filtros */}
       <Card className="mb-4">
         <CardContent className="pt-5">
           <form className="flex flex-wrap items-end gap-3" method="get">
+            <input type="hidden" name="level" value={level} />
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="q">Campanha</Label>
+              <Label htmlFor="q">{levelCfg.label.slice(0, -1)}</Label>
               <Input
                 id="q"
                 name="q"
@@ -286,7 +347,7 @@ export default async function CampanhasPage(props: {
 
       <Card className="mt-3">
         <CardContent className="pt-5">
-          <CampaignsFlat rows={flatRows} />
+          <CampaignsFlat rows={flatRows} nameLabel={levelCfg.label.slice(0, -1)} />
         </CardContent>
       </Card>
     </>

@@ -47,11 +47,17 @@ function Money({ v, color }: { v: number; color?: boolean }) {
   )
 }
 
-export function CampaignsFlat({ rows }: { rows: FlatCampaign[] }) {
+export function CampaignsFlat({
+  rows,
+  nameLabel = 'Campanha',
+}: {
+  rows: FlatCampaign[]
+  nameLabel?: string
+}) {
   if (rows.length === 0) {
     return (
       <p className="py-12 text-center text-sm text-muted-foreground">
-        Nenhuma campanha com dados no período.
+        Nenhum dado no período.
       </p>
     )
   }
@@ -92,7 +98,7 @@ export function CampaignsFlat({ rows }: { rows: FlatCampaign[] }) {
         <thead>
           <tr className="border-b border-border">
             <Head>Status</Head>
-            <Head>Campanha</Head>
+            <Head>{nameLabel}</Head>
             <Head right>Lucro</Head>
             <Head right>Orçamento</Head>
             <Head right>Gastos</Head>
@@ -175,7 +181,9 @@ export function CampaignsFlat({ rows }: { rows: FlatCampaign[] }) {
         <tfoot>
           <tr className="border-t-2 border-border font-semibold">
             <td className="px-3 py-3" />
-            <td className="px-3 py-3">{sorted.length} campanhas</td>
+            <td className="px-3 py-3">
+              {sorted.length} {nameLabel.toLowerCase()}s
+            </td>
             <td className="px-3 py-3 text-right">
               <Money v={t.revenue - t.spend} color />
             </td>
