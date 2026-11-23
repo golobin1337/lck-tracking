@@ -187,6 +187,26 @@ export async function getRevenueByCampaign(
   return map
 }
 
+// Nº de InitiateCheckout por utm_campaign (chave minúscula) — para a aba Campanhas.
+export async function getCheckoutByCampaign(
+  supabase: SupabaseClient,
+  offerId?: string | null
+): Promise<Map<string, number>> {
+  let q = supabase
+    .from('events_log')
+    .select('utm_campaign')
+    .eq('event_name', 'InitiateCheckout')
+  if (offerId) q = q.eq('offer_id', offerId)
+  const { data } = await q
+  const map = new Map<string, number>()
+  for (const r of data ?? []) {
+    const k = (r.utm_campaign ?? '').toLowerCase()
+    if (!k) continue
+    map.set(k, (map.get(k) ?? 0) + 1)
+  }
+  return map
+}
+
 export type GeoBucket = { key: string; label: string; count: number }
 export type GeoBreakdown = {
   countries: GeoBucket[]

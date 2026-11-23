@@ -3,7 +3,7 @@ import { DollarSign, TrendingUp, Target, RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentOfferId } from '@/lib/offers'
 import { getActiveAdAccounts } from '@/lib/destinations'
-import { getRevenueByCampaign } from '@/lib/analytics'
+import { getRevenueByCampaign, getCheckoutByCampaign } from '@/lib/analytics'
 import {
   fetchAdInsights,
   buildCampaignTree,
@@ -12,13 +12,17 @@ import {
 } from '@/lib/meta-ads'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
-import { CampaignsTree } from '@/components/dashboard/campaigns-tree'
+import {
+  CampaignsFlat,
+  type FlatCampaign,
+} from '@/components/dashboard/campaigns-flat'
 import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { formatCurrency } from '@/lib/utils'
 
-type SP = { account?: string; preset?: string; refresh?: string }
+type SP = { account?: string; preset?: string; refresh?: string; q?: string }
 
 const PRESETS: { value: DatePreset; label: string }[] = [
   { value: 'today', label: 'Hoje' },
@@ -72,7 +76,18 @@ export default async function CampanhasPage(props: {
   const toQuery =
     selected === 'all' ? accounts : accounts.filter((a) => a.id === selected)
 
-  const revByCamp = await getRevenueByCampaign(supabase, offerId)
+  const [revByCamp, icByCamp, paidCountRes] = await Promise.all([
+    getRevenueByCampaign(supabase, offerId),
+    getCheckoutByCampaign(supabase, offerId),
+    (() => {
+      let q = supabase
+        .from('purchases')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'paid')
+      if (offerId) q = q.eq('offer_id', offerId)
+      return q
+    })(),
+  ])
 
   const results = await Promise.all(
     toQuery.map((acc) =>
@@ -97,16 +112,30 @@ export default async function CampanhasPage(props: {
   }
 
   const tree = buildCampaignTree(rows, revByCamp)
+  let flatRows: FlatCampaign[] = tree.map((c) => ({
+    id: c.id,
+    name: c.name,
+    spend: c.spend,
+    revenue: c.revenue,
+    sales: c.purchases,
+    clicks: c.clicks,
+    ic: icByCamp.get(c.name.toLowerCase()) ?? 0,
+  }))
+  const q = (sp.q ?? '').trim().toLowerCase()
+  if (q) flatRows = flatRows.filter((r) => r.name.toLowerCase().includes(q))
+
   const totalSpend = tree.reduce((s, c) => s + c.spend, 0)
   const totalRevenue = tree.reduce((s, c) => s + c.revenue, 0)
   const totalPurchases = tree.reduce((s, c) => s + c.purchases, 0)
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : null
   const cpa = totalPurchases > 0 ? totalSpend / totalPurchases : null
+  const untracked = Math.max(0, (paidCountRes.count ?? 0) - totalPurchases)
 
   const hrefWith = (patch: Partial<SP>) => {
     const params = new URLSearchParams()
     params.set('account', patch.account ?? selected)
     params.set('preset', patch.preset ?? preset)
+    if (sp.q) params.set('q', sp.q)
     if (patch.refresh) params.set('refresh', '1')
     return `/dashboard/campanhas?${params.toString()}`
   }
@@ -124,6 +153,11 @@ export default async function CampanhasPage(props: {
         title="Campanhas"
         description="Insights do Meta Ads cruzados com receita (ROAS e CPA)."
       >
+        {untracked > 0 && (
+          <span className="rounded-md border border-amber/40 bg-amber/10 px-2.5 py-1 text-xs font-medium text-amber">
+            {untracked} venda(s) não trackeada(s)
+          </span>
+        )}
         <Button variant="outline" size="sm" asChild>
           <Link href={hrefWith({ refresh: '1' })}>
             <RefreshCw />
@@ -136,6 +170,16 @@ export default async function CampanhasPage(props: {
       <Card className="mb-4">
         <CardContent className="pt-5">
           <form className="flex flex-wrap items-end gap-3" method="get">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="q">Campanha</Label>
+              <Input
+                id="q"
+                name="q"
+                defaultValue={sp.q ?? ''}
+                placeholder="Filtrar por nome"
+                className="w-48"
+              />
+            </div>
             {accounts.length > 1 && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="account">Conta de anúncio</Label>
@@ -230,7 +274,7 @@ export default async function CampanhasPage(props: {
 
       <Card className="mt-3">
         <CardContent className="pt-5">
-          <CampaignsTree campaigns={tree} />
+          <CampaignsFlat rows={flatRows} />
         </CardContent>
       </Card>
     </>
