@@ -113,12 +113,6 @@ export function CampaignsFlat({
           <tr className="border-b border-border">
             <Head>Status</Head>
             <Head>{nameLabel}</Head>
-            <Head right>CPC</Head>
-            <Head right>CTR</Head>
-            <Head right>CPM</Head>
-            <Head right>Hook</Head>
-            <Head right>Hold Rate</Head>
-            <Head right>Frequência</Head>
             <Head right>Lucro</Head>
             <Head right>Gastos</Head>
             <Head right>Faturamento</Head>
@@ -128,6 +122,12 @@ export function CampaignsFlat({
             <Head right>IC</Head>
             <Head right>Cliques</Head>
             <Head right>ARPU</Head>
+            <Head right>CPC</Head>
+            <Head right>CTR</Head>
+            <Head right>CPM</Head>
+            <Head right>Hook</Head>
+            <Head right>Hold Rate</Head>
+            <Head right>Frequência</Head>
           </tr>
         </thead>
         <tbody>
@@ -152,24 +152,6 @@ export function CampaignsFlat({
                 </td>
                 <td className="max-w-[240px] truncate px-3 py-3" title={r.name}>
                   {r.name}
-                </td>
-                <td className="px-3 py-3 text-right text-muted-foreground">
-                  {cc !== null ? <Money v={cc} /> : '—'}
-                </td>
-                <td className="tabular px-3 py-3 text-right text-muted-foreground">
-                  {ct !== null ? `${ct.toFixed(2)}%` : '—'}
-                </td>
-                <td className="px-3 py-3 text-right text-muted-foreground">
-                  {cm !== null ? <Money v={cm} /> : '—'}
-                </td>
-                <td className="tabular px-3 py-3 text-right text-muted-foreground">
-                  {hk !== null ? `${hk.toFixed(2)}%` : 'N/A'}
-                </td>
-                <td className="tabular px-3 py-3 text-right text-muted-foreground">
-                  {hr !== null ? `${hr.toFixed(2)}%` : 'N/A'}
-                </td>
-                <td className="tabular px-3 py-3 text-right text-muted-foreground">
-                  {fr !== null ? fr.toFixed(2) : '—'}
                 </td>
                 <td className="px-3 py-3 text-right">
                   <Money v={lucro} color />
@@ -207,6 +189,24 @@ export function CampaignsFlat({
                 <td className="px-3 py-3 text-right text-muted-foreground">
                   {ar !== null ? <Money v={ar} /> : '—'}
                 </td>
+                <td className="px-3 py-3 text-right text-muted-foreground">
+                  {cc !== null ? <Money v={cc} /> : '—'}
+                </td>
+                <td className="tabular px-3 py-3 text-right text-muted-foreground">
+                  {ct !== null ? `${ct.toFixed(2)}%` : '—'}
+                </td>
+                <td className="px-3 py-3 text-right text-muted-foreground">
+                  {cm !== null ? <Money v={cm} /> : '—'}
+                </td>
+                <td className="tabular px-3 py-3 text-right text-muted-foreground">
+                  {hk !== null ? `${hk.toFixed(2)}%` : 'N/A'}
+                </td>
+                <td className="tabular px-3 py-3 text-right text-muted-foreground">
+                  {hr !== null ? `${hr.toFixed(2)}%` : 'N/A'}
+                </td>
+                <td className="tabular px-3 py-3 text-right text-muted-foreground">
+                  {fr !== null ? fr.toFixed(2) : '—'}
+                </td>
               </tr>
             )
           })}
@@ -216,40 +216,6 @@ export function CampaignsFlat({
             <td className="px-3 py-3" />
             <td className="px-3 py-3">
               {sorted.length} {nameLabel.toLowerCase()}s
-            </td>
-            <td className="px-3 py-3 text-right">
-              {cpc(t.spend, t.clicks) !== null ? (
-                <Money v={cpc(t.spend, t.clicks)!} />
-              ) : (
-                '—'
-              )}
-            </td>
-            <td className="tabular px-3 py-3 text-right">
-              {ctr(t.clicks, t.impressions) !== null
-                ? `${ctr(t.clicks, t.impressions)!.toFixed(2)}%`
-                : '—'}
-            </td>
-            <td className="px-3 py-3 text-right">
-              {cpm(t.spend, t.impressions) !== null ? (
-                <Money v={cpm(t.spend, t.impressions)!} />
-              ) : (
-                '—'
-              )}
-            </td>
-            <td className="tabular px-3 py-3 text-right">
-              {hook(t.video_views_3s, t.impressions) !== null
-                ? `${hook(t.video_views_3s, t.impressions)!.toFixed(2)}%`
-                : 'N/A'}
-            </td>
-            <td className="tabular px-3 py-3 text-right">
-              {holdRate(t.thruplay, t.video_views_3s) !== null
-                ? `${holdRate(t.thruplay, t.video_views_3s)!.toFixed(2)}%`
-                : 'N/A'}
-            </td>
-            <td className="tabular px-3 py-3 text-right">
-              {freq(t.impressions, t.reach) !== null
-                ? freq(t.impressions, t.reach)!.toFixed(2)
-                : '—'}
             </td>
             <td className="px-3 py-3 text-right">
               <Money v={t.revenue - t.spend} color />
@@ -287,6 +253,40 @@ export function CampaignsFlat({
               ) : (
                 '—'
               )}
+            </td>
+            <td className="px-3 py-3 text-right">
+              {cpc(t.spend, t.clicks) !== null ? (
+                <Money v={cpc(t.spend, t.clicks)!} />
+              ) : (
+                '—'
+              )}
+            </td>
+            <td className="tabular px-3 py-3 text-right">
+              {ctr(t.clicks, t.impressions) !== null
+                ? `${ctr(t.clicks, t.impressions)!.toFixed(2)}%`
+                : '—'}
+            </td>
+            <td className="px-3 py-3 text-right">
+              {cpm(t.spend, t.impressions) !== null ? (
+                <Money v={cpm(t.spend, t.impressions)!} />
+              ) : (
+                '—'
+              )}
+            </td>
+            <td className="tabular px-3 py-3 text-right">
+              {hook(t.video_views_3s, t.impressions) !== null
+                ? `${hook(t.video_views_3s, t.impressions)!.toFixed(2)}%`
+                : 'N/A'}
+            </td>
+            <td className="tabular px-3 py-3 text-right">
+              {holdRate(t.thruplay, t.video_views_3s) !== null
+                ? `${holdRate(t.thruplay, t.video_views_3s)!.toFixed(2)}%`
+                : 'N/A'}
+            </td>
+            <td className="tabular px-3 py-3 text-right">
+              {freq(t.impressions, t.reach) !== null
+                ? freq(t.impressions, t.reach)!.toFixed(2)
+                : '—'}
             </td>
           </tr>
         </tfoot>
