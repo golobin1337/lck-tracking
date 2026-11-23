@@ -360,6 +360,66 @@ export async function getAdSpendByHour(
   return total
 }
 
+// ---- Metadados das campanhas (status + orçamento diário em BRL) ----
+export type CampaignMeta = { status: string; budget: number | null }
+const campMetaCache = new Map<
+  string,
+  { map: Record<string, CampaignMeta>; fetchedAt: number }
+>()
+
+async function fetchCampaignMetaAccount(account: {
+  id: string
+  ad_account_id: string
+  token: string
+}): Promise<Record<string, CampaignMeta>> {
+  const key = account.id + ':campmeta'
+  const now = Date.now()
+  const cached = campMetaCache.get(key)
+  if (cached && now - cached.fetchedAt < AD_INSIGHTS_TTL_MS) return cached.map
+  const empty: Record<string, CampaignMeta> = {}
+  if (metaIsDown()) return cached?.map ?? empty
+
+  // currency + campanhas numa chamada só (field expansion).
+  const url =
+    `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${normalizeAccountId(
+      account.ad_account_id
+    )}` +
+    `?fields=currency,campaigns.limit(500){id,effective_status,daily_budget,lifetime_budget}` +
+    `&access_token=${encodeURIComponent(account.token)}`
+
+  try {
+    const res = await metaFetch(url)
+    const body = await res.json().catch(() => null)
+    if (!res.ok) {
+      lastMetaError = body?.error?.message || `HTTP ${res.status}`
+      return cached?.map ?? empty
+    }
+    markMetaUp()
+    const rate = await fxToBrl(body?.currency)
+    const map: Record<string, CampaignMeta> = {}
+    for (const c of body?.campaigns?.data ?? []) {
+      const cents = Number(c.daily_budget ?? c.lifetime_budget ?? 0)
+      map[String(c.id)] = {
+        status: String(c.effective_status ?? ''),
+        budget: cents > 0 ? (cents / 100) * rate : null,
+      }
+    }
+    campMetaCache.set(key, { map, fetchedAt: now })
+    return map
+  } catch {
+    return cached?.map ?? empty
+  }
+}
+
+export async function getCampaignMeta(
+  accounts: { id: string; ad_account_id: string; token: string }[]
+): Promise<Record<string, CampaignMeta>> {
+  const maps = await Promise.all(
+    accounts.map((a) => fetchCampaignMetaAccount(a))
+  )
+  return Object.assign({}, ...maps)
+}
+
 // ---- Agregação em árvore campanha → conjunto → anúncio ----
 export type AdNode = {
   id: string

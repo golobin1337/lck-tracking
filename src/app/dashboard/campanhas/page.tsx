@@ -7,6 +7,7 @@ import { getRevenueByCampaign, getCheckoutByCampaign } from '@/lib/analytics'
 import {
   fetchAdInsights,
   buildCampaignTree,
+  getCampaignMeta,
   type AdInsightRow,
   type DatePreset,
 } from '@/lib/meta-ads'
@@ -89,15 +90,24 @@ export default async function CampanhasPage(props: {
     })(),
   ])
 
-  const results = await Promise.all(
-    toQuery.map((acc) =>
-      fetchAdInsights(
-        { id: acc.id, ad_account_id: acc.ad_account_id, token: acc.token },
-        preset,
-        force
+  const [results, campMeta] = await Promise.all([
+    Promise.all(
+      toQuery.map((acc) =>
+        fetchAdInsights(
+          { id: acc.id, ad_account_id: acc.ad_account_id, token: acc.token },
+          preset,
+          force
+        )
       )
-    )
-  )
+    ),
+    getCampaignMeta(
+      toQuery.map((a) => ({
+        id: a.id,
+        ad_account_id: a.ad_account_id,
+        token: a.token,
+      }))
+    ),
+  ])
   let rows: AdInsightRow[] = []
   let fetchedAt = 0
   let error: string | null = null
@@ -115,6 +125,8 @@ export default async function CampanhasPage(props: {
   let flatRows: FlatCampaign[] = tree.map((c) => ({
     id: c.id,
     name: c.name,
+    status: campMeta[c.id]?.status ?? '',
+    budget: campMeta[c.id]?.budget ?? null,
     spend: c.spend,
     revenue: c.revenue,
     sales: c.purchases,

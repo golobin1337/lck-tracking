@@ -3,11 +3,35 @@ import { formatCurrency, formatNumber, cn } from '@/lib/utils'
 export type FlatCampaign = {
   id: string
   name: string
+  status: string
+  budget: number | null
   spend: number
   revenue: number
   sales: number
   clicks: number
   ic: number
+}
+
+function StatusPill({ status }: { status: string }) {
+  const active = status === 'ACTIVE'
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium',
+        active
+          ? 'bg-success/15 text-success'
+          : 'bg-secondary text-muted-foreground'
+      )}
+    >
+      <span
+        className={cn(
+          'size-1.5 rounded-full',
+          active ? 'bg-success' : 'bg-muted-foreground'
+        )}
+      />
+      {active ? 'Ativo' : 'Pausado'}
+    </span>
+  )
 }
 
 function Money({ v, color }: { v: number; color?: boolean }) {
@@ -41,9 +65,10 @@ export function CampaignsFlat({ rows }: { rows: FlatCampaign[] }) {
       acc.sales += r.sales
       acc.clicks += r.clicks
       acc.ic += r.ic
+      acc.budget += r.budget ?? 0
       return acc
     },
-    { spend: 0, revenue: 0, sales: 0, clicks: 0, ic: 0 }
+    { spend: 0, revenue: 0, sales: 0, clicks: 0, ic: 0, budget: 0 }
   )
 
   const roas = (rev: number, sp: number) => (sp > 0 ? rev / sp : null)
@@ -66,8 +91,10 @@ export function CampaignsFlat({ rows }: { rows: FlatCampaign[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border">
+            <Head>Status</Head>
             <Head>Campanha</Head>
             <Head right>Lucro</Head>
+            <Head right>Orçamento</Head>
             <Head right>Gastos</Head>
             <Head right>Faturamento</Head>
             <Head right>Vendas</Head>
@@ -89,11 +116,24 @@ export function CampaignsFlat({ rows }: { rows: FlatCampaign[] }) {
                 key={r.id}
                 className="border-b border-border/50 last:border-0 hover:bg-secondary/40"
               >
-                <td className="max-w-[260px] truncate px-3 py-3" title={r.name}>
+                <td className="px-3 py-3">
+                  <StatusPill status={r.status} />
+                </td>
+                <td className="max-w-[240px] truncate px-3 py-3" title={r.name}>
                   {r.name}
                 </td>
                 <td className="px-3 py-3 text-right">
                   <Money v={lucro} color />
+                </td>
+                <td className="px-3 py-3 text-right text-muted-foreground">
+                  {r.budget !== null ? (
+                    <span className="tabular">
+                      {formatCurrency(r.budget)}
+                      <span className="text-[10px]">/dia</span>
+                    </span>
+                  ) : (
+                    '—'
+                  )}
                 </td>
                 <td className="px-3 py-3 text-right">
                   <Money v={r.spend} />
@@ -134,9 +174,17 @@ export function CampaignsFlat({ rows }: { rows: FlatCampaign[] }) {
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-border font-semibold">
+            <td className="px-3 py-3" />
             <td className="px-3 py-3">{sorted.length} campanhas</td>
             <td className="px-3 py-3 text-right">
               <Money v={t.revenue - t.spend} color />
+            </td>
+            <td className="px-3 py-3 text-right text-muted-foreground">
+              {t.budget > 0 ? (
+                <span className="tabular">{formatCurrency(t.budget)}</span>
+              ) : (
+                '—'
+              )}
             </td>
             <td className="px-3 py-3 text-right">
               <Money v={t.spend} />
