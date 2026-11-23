@@ -77,6 +77,15 @@ export type AdInsightRow = {
   spend: number
   impressions: number
   clicks: number
+  reach: number
+  video_views_3s: number
+  thruplay: number
+}
+
+function extractActionValue(actions: unknown): number {
+  if (!Array.isArray(actions)) return 0
+  const item = actions.find((a: Record<string, unknown>) => a.action_type === 'video_view')
+  return Number(item?.value ?? 0)
 }
 
 type CacheEntry = {
@@ -150,7 +159,7 @@ export async function fetchAdInsights(
   }
 
   const fields =
-    'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,account_currency'
+    'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,reach,account_currency,video_play_actions,video_thruplay_watched_actions'
   const url =
     `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${normalizeAccountId(
       account.ad_account_id
@@ -188,6 +197,9 @@ export async function fetchAdInsights(
       spend: Number(r.spend ?? 0) * rate,
       impressions: Number(r.impressions ?? 0),
       clicks: Number(r.clicks ?? 0),
+      reach: Number(r.reach ?? 0),
+      video_views_3s: extractActionValue(r.video_play_actions),
+      thruplay: extractActionValue(r.video_thruplay_watched_actions),
     }))
     const result: CacheEntry = { rows, fetchedAt: now, error: null }
     cache.set(key, result)

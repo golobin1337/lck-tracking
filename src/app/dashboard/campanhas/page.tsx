@@ -184,7 +184,7 @@ export default async function CampanhasPage(props: {
   // Agrega os insights (nível anúncio) pelo nível selecionado (id).
   const groups = new Map<
     string,
-    { id: string; name: string; spend: number; clicks: number }
+    { id: string; name: string; spend: number; clicks: number; impressions: number; reach: number; video_views_3s: number; thruplay: number }
   >()
   for (const r of rows) {
     const id =
@@ -200,9 +200,13 @@ export default async function CampanhasPage(props: {
           ? r.adset_name
           : r.ad_name
     if (!id) continue
-    const e = groups.get(id) ?? { id, name, spend: 0, clicks: 0 }
+    const e = groups.get(id) ?? { id, name, spend: 0, clicks: 0, impressions: 0, reach: 0, video_views_3s: 0, thruplay: 0 }
     e.spend += r.spend
     e.clicks += r.clicks
+    e.impressions += r.impressions
+    e.reach += r.reach
+    e.video_views_3s += r.video_views_3s
+    e.thruplay += r.thruplay
     groups.set(id, e)
   }
 
@@ -215,6 +219,10 @@ export default async function CampanhasPage(props: {
       budget: level === 'campaign' ? campMeta[g.id]?.budget ?? null : null,
       spend: g.spend,
       clicks: g.clicks,
+      impressions: g.impressions,
+      reach: g.reach,
+      video_views_3s: g.video_views_3s,
+      thruplay: g.thruplay,
       revenue: rev?.revenue ?? 0,
       sales: rev?.count ?? 0,
       ic: icById.get(g.id) ?? 0,
