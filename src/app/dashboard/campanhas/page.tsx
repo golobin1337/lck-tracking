@@ -30,8 +30,9 @@ type SP = {
   level?: string
 }
 
-type Level = 'campaign' | 'adset' | 'ad'
+type Level = 'account' | 'campaign' | 'adset' | 'ad'
 const LEVELS: { value: Level; label: string; column: 'utm_campaign' | 'utm_medium' | 'utm_content' }[] = [
+  { value: 'account', label: 'Contas', column: 'utm_campaign' },
   { value: 'campaign', label: 'Campanhas', column: 'utm_campaign' },
   { value: 'adset', label: 'Conjuntos', column: 'utm_medium' },
   { value: 'ad', label: 'Anúncios', column: 'utm_content' },
@@ -135,9 +136,11 @@ export default async function CampanhasPage(props: {
     selected === 'all' ? accounts : accounts.filter((a) => a.id === selected)
 
   const range = presetRange(preset)
+
+  const revColumn = level === 'account' ? 'utm_campaign' : levelCfg.column
   const [revById, icById, paidCountRes] = await Promise.all([
-    getRevenueByMetaId(supabase, levelCfg.column, offerId, range),
-    getCheckoutByMetaId(supabase, levelCfg.column, offerId, range),
+    getRevenueByMetaId(supabase, revColumn, offerId, range),
+    getCheckoutByMetaId(supabase, revColumn, offerId, range),
     (() => {
       let q = supabase
         .from('purchases')
@@ -168,66 +171,99 @@ export default async function CampanhasPage(props: {
       }))
     ),
   ])
-  let rows: AdInsightRow[] = []
+
   let fetchedAt = 0
   let error: string | null = null
   let allCached = true
   let throttled = false
   for (const r of results) {
-    rows = rows.concat(r.rows)
     fetchedAt = Math.max(fetchedAt, r.fetchedAt)
     if (r.error) error = r.error
     allCached = allCached && r.cached
     throttled = throttled || r.throttled
   }
 
-  // Agrega os insights (nível anúncio) pelo nível selecionado (id).
-  const groups = new Map<
-    string,
-    { id: string; name: string; spend: number; clicks: number; impressions: number; reach: number; video_views_3s: number; thruplay: number }
-  >()
-  for (const r of rows) {
-    const id =
-      level === 'campaign'
-        ? r.campaign_id
-        : level === 'adset'
-          ? r.adset_id
-          : r.ad_id
-    const name =
-      level === 'campaign'
-        ? r.campaign_name
-        : level === 'adset'
-          ? r.adset_name
-          : r.ad_name
-    if (!id) continue
-    const e = groups.get(id) ?? { id, name, spend: 0, clicks: 0, impressions: 0, reach: 0, video_views_3s: 0, thruplay: 0 }
-    e.spend += r.spend
-    e.clicks += r.clicks
-    e.impressions += r.impressions
-    e.reach += r.reach
-    e.video_views_3s += r.video_views_3s
-    e.thruplay += r.thruplay
-    groups.set(id, e)
-  }
+  let flatRows: FlatCampaign[]
 
-  let flatRows: FlatCampaign[] = [...groups.values()].map((g) => {
-    const rev = revById.get(g.id)
-    return {
-      id: g.id,
-      name: g.name,
-      status: level === 'campaign' ? campMeta[g.id]?.status ?? '' : '',
-      budget: level === 'campaign' ? campMeta[g.id]?.budget ?? null : null,
-      spend: g.spend,
-      clicks: g.clicks,
-      impressions: g.impressions,
-      reach: g.reach,
-      video_views_3s: g.video_views_3s,
-      thruplay: g.thruplay,
-      revenue: rev?.revenue ?? 0,
-      sales: rev?.count ?? 0,
-      ic: icById.get(g.id) ?? 0,
+  if (level === 'account') {
+    // Nível Contas: agrega insights por conta de anúncio.
+    flatRows = toQuery.map((acc, i) => {
+      const accRows = results[i].rows
+      const spend = accRows.reduce((s, r) => s + r.spend, 0)
+      const clicks = accRows.reduce((s, r) => s + r.clicks, 0)
+      const impressions = accRows.reduce((s, r) => s + r.impressions, 0)
+      const reach = accRows.reduce((s, r) => s + r.reach, 0)
+      const video_views_3s = accRows.reduce((s, r) => s + r.video_views_3s, 0)
+      const thruplay = accRows.reduce((s, r) => s + r.thruplay, 0)
+      // Receita: soma a receita de todas as campanhas desta conta.
+      const campIds = new Set(accRows.map((r) => r.campaign_id))
+      let revenue = 0
+      let sales = 0
+      let ic = 0
+      for (const cid of campIds) {
+        const rev = revById.get(cid)
+        if (rev) { revenue += rev.revenue; sales += rev.count }
+        ic += icById.get(cid) ?? 0
+      }
+      return {
+        id: acc.id,
+        name: acc.label,
+        status: '',
+        budget: null,
+        spend, clicks, impressions, reach, video_views_3s, thruplay,
+        revenue, sales, ic,
+      }
+    })
+  } else {
+    // Níveis Campanhas/Conjuntos/Anúncios: agrega por ID do nível.
+    const allRows: AdInsightRow[] = results.flatMap((r) => r.rows)
+    const groups = new Map<
+      string,
+      { id: string; name: string; spend: number; clicks: number; impressions: number; reach: number; video_views_3s: number; thruplay: number }
+    >()
+    for (const r of allRows) {
+      const id =
+        level === 'campaign'
+          ? r.campaign_id
+          : level === 'adset'
+            ? r.adset_id
+            : r.ad_id
+      const name =
+        level === 'campaign'
+          ? r.campaign_name
+          : level === 'adset'
+            ? r.adset_name
+            : r.ad_name
+      if (!id) continue
+      const e = groups.get(id) ?? { id, name, spend: 0, clicks: 0, impressions: 0, reach: 0, video_views_3s: 0, thruplay: 0 }
+      e.spend += r.spend
+      e.clicks += r.clicks
+      e.impressions += r.impressions
+      e.reach += r.reach
+      e.video_views_3s += r.video_views_3s
+      e.thruplay += r.thruplay
+      groups.set(id, e)
     }
-  })
+
+    flatRows = [...groups.values()].map((g) => {
+      const rev = revById.get(g.id)
+      return {
+        id: g.id,
+        name: g.name,
+        status: level === 'campaign' ? campMeta[g.id]?.status ?? '' : '',
+        budget: level === 'campaign' ? campMeta[g.id]?.budget ?? null : null,
+        spend: g.spend,
+        clicks: g.clicks,
+        impressions: g.impressions,
+        reach: g.reach,
+        video_views_3s: g.video_views_3s,
+        thruplay: g.thruplay,
+        revenue: rev?.revenue ?? 0,
+        sales: rev?.count ?? 0,
+        ic: icById.get(g.id) ?? 0,
+      }
+    })
+  }
   const q = (sp.q ?? '').trim().toLowerCase()
   if (q) flatRows = flatRows.filter((r) => r.name.toLowerCase().includes(q))
 
@@ -306,7 +342,7 @@ export default async function CampanhasPage(props: {
                 className="w-48"
               />
             </div>
-            {accounts.length > 1 && (
+            {accounts.length > 1 && level !== 'account' && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="account">Conta de anúncio</Label>
                 <select
