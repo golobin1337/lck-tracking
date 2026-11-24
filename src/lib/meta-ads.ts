@@ -15,7 +15,7 @@ const MIN_REFRESH_MS = 5 * 60_000
 
 // Timeout + "circuit breaker": a chamada à Meta nunca pode travar a navegação.
 // Se a Meta falhar (ex.: token bloqueado), paramos de chamar por 5 min.
-const META_TIMEOUT_MS = 4000
+const META_TIMEOUT_MS = 10000
 let metaDownUntil = 0
 let lastMetaError: string | null = null
 function metaIsDown(): boolean {
