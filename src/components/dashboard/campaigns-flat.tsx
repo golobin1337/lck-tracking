@@ -1,4 +1,9 @@
+'use client'
+
+import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatCurrency, formatNumber, cn } from '@/lib/utils'
+import { toggleAdStatus } from '@/app/dashboard/campanhas/actions'
 
 export type FlatCampaign = {
   id: string
@@ -14,27 +19,57 @@ export type FlatCampaign = {
   video_views_3s: number
   thruplay: number
   ic: number
+  accountId: string
 }
 
-function StatusPill({ status }: { status: string }) {
-  const active = status === 'ACTIVE'
+function StatusToggle({
+  entityId,
+  accountId,
+  initialStatus,
+}: {
+  entityId: string
+  accountId: string
+  initialStatus: string
+}) {
+  const active = initialStatus === 'ACTIVE'
+  const [on, setOn] = useState(active)
+  const [pending, startTransition] = useTransition()
+  const router = useRouter()
+
+  if (!initialStatus) return <span className="text-xs text-muted-foreground">—</span>
+
+  function handleToggle() {
+    const next = on ? 'PAUSED' : 'ACTIVE'
+    setOn(!on)
+    startTransition(async () => {
+      const res = await toggleAdStatus(entityId, accountId, next as 'ACTIVE' | 'PAUSED')
+      if (!res.ok) {
+        setOn(on)
+        alert(res.error ?? 'Erro ao alterar status')
+      } else {
+        router.refresh()
+      }
+    })
+  }
+
   return (
-    <span
+    <button
+      onClick={handleToggle}
+      disabled={pending}
       className={cn(
-        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium',
-        active
-          ? 'bg-success/15 text-success'
-          : 'bg-secondary text-muted-foreground'
+        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        on ? 'bg-primary' : 'bg-muted-foreground/30',
+        pending && 'opacity-50'
       )}
     >
       <span
         className={cn(
-          'size-1.5 rounded-full',
-          active ? 'bg-success' : 'bg-muted-foreground'
+          'pointer-events-none inline-block size-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+          on ? 'translate-x-[18px]' : 'translate-x-[2px]',
+          'mt-[2px]'
         )}
       />
-      {active ? 'Ativo' : 'Pausado'}
-    </span>
+    </button>
   )
 }
 
@@ -148,7 +183,11 @@ export function CampaignsFlat({
                 className="border-b border-border/50 last:border-0 hover:bg-secondary/40"
               >
                 <td className="px-3 py-3">
-                  <StatusPill status={r.status} />
+                  <StatusToggle
+                    entityId={r.id}
+                    accountId={r.accountId}
+                    initialStatus={r.status}
+                  />
                 </td>
                 <td className="max-w-[240px] truncate px-3 py-3" title={r.name}>
                   {r.name}

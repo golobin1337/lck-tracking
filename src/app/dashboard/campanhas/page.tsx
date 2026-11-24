@@ -185,8 +185,17 @@ export default async function CampanhasPage(props: {
 
   let flatRows: FlatCampaign[]
 
+  // Mapa entity_id → accountId (DB id) para o toggle saber qual token usar.
+  const entityAccount = new Map<string, string>()
+  for (let i = 0; i < toQuery.length; i++) {
+    for (const r of results[i].rows) {
+      if (!entityAccount.has(r.campaign_id)) entityAccount.set(r.campaign_id, toQuery[i].id)
+      if (!entityAccount.has(r.adset_id)) entityAccount.set(r.adset_id, toQuery[i].id)
+      if (!entityAccount.has(r.ad_id)) entityAccount.set(r.ad_id, toQuery[i].id)
+    }
+  }
+
   if (level === 'account') {
-    // Nível Contas: agrega insights por conta de anúncio.
     flatRows = toQuery.map((acc, i) => {
       const accRows = results[i].rows
       const spend = accRows.reduce((s, r) => s + r.spend, 0)
@@ -195,7 +204,6 @@ export default async function CampanhasPage(props: {
       const reach = accRows.reduce((s, r) => s + r.reach, 0)
       const video_views_3s = accRows.reduce((s, r) => s + r.video_views_3s, 0)
       const thruplay = accRows.reduce((s, r) => s + r.thruplay, 0)
-      // Receita: soma a receita de todas as campanhas desta conta.
       const campIds = new Set(accRows.map((r) => r.campaign_id))
       let revenue = 0
       let sales = 0
@@ -212,10 +220,10 @@ export default async function CampanhasPage(props: {
         budget: null,
         spend, clicks, impressions, reach, video_views_3s, thruplay,
         revenue, sales, ic,
+        accountId: acc.id,
       }
     })
   } else {
-    // Níveis Campanhas/Conjuntos/Anúncios: agrega por ID do nível.
     const allRows: AdInsightRow[] = results.flatMap((r) => r.rows)
     const groups = new Map<
       string,
@@ -250,7 +258,7 @@ export default async function CampanhasPage(props: {
       return {
         id: g.id,
         name: g.name,
-        status: level === 'campaign' ? campMeta[g.id]?.status ?? '' : '',
+        status: campMeta[g.id]?.status ?? '',
         budget: level === 'campaign' ? campMeta[g.id]?.budget ?? null : null,
         spend: g.spend,
         clicks: g.clicks,
@@ -261,6 +269,7 @@ export default async function CampanhasPage(props: {
         revenue: rev?.revenue ?? 0,
         sales: rev?.count ?? 0,
         ic: icById.get(g.id) ?? 0,
+        accountId: entityAccount.get(g.id) ?? '',
       }
     })
   }

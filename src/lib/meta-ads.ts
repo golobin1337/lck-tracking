@@ -372,7 +372,7 @@ export async function getAdSpendByHour(
   return total
 }
 
-// ---- Metadados das campanhas (status + orçamento diário em BRL) ----
+// ---- Metadados (status + orçamento) de campanhas, conjuntos e anúncios ----
 export type CampaignMeta = { status: string; budget: number | null }
 const campMetaCache = new Map<
   string,
@@ -391,12 +391,11 @@ async function fetchCampaignMetaAccount(account: {
   const empty: Record<string, CampaignMeta> = {}
   if (metaIsDown()) return cached?.map ?? empty
 
-  // currency + campanhas numa chamada só (field expansion).
   const url =
     `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${normalizeAccountId(
       account.ad_account_id
     )}` +
-    `?fields=currency,campaigns.limit(500){id,effective_status,daily_budget,lifetime_budget}` +
+    `?fields=currency,campaigns.limit(500){id,effective_status,daily_budget,lifetime_budget,adsets.limit(500){id,effective_status,ads.limit(500){id,effective_status}}}` +
     `&access_token=${encodeURIComponent(account.token)}`
 
   try {
@@ -415,6 +414,18 @@ async function fetchCampaignMetaAccount(account: {
         status: String(c.effective_status ?? ''),
         budget: cents > 0 ? (cents / 100) * rate : null,
       }
+      for (const as of c.adsets?.data ?? []) {
+        map[String(as.id)] = {
+          status: String(as.effective_status ?? ''),
+          budget: null,
+        }
+        for (const ad of as.ads?.data ?? []) {
+          map[String(ad.id)] = {
+            status: String(ad.effective_status ?? ''),
+            budget: null,
+          }
+        }
+      }
     }
     campMetaCache.set(key, { map, fetchedAt: now })
     return map
@@ -430,6 +441,30 @@ export async function getCampaignMeta(
     accounts.map((a) => fetchCampaignMetaAccount(a))
   )
   return Object.assign({}, ...maps)
+}
+
+export function clearCampMetaCache(accountId: string): void {
+  campMetaCache.delete(accountId + ':campmeta')
+}
+
+export async function toggleEntityStatus(
+  entityId: string,
+  token: string,
+  newStatus: 'ACTIVE' | 'PAUSED'
+): Promise<{ ok: boolean; error?: string }> {
+  const url =
+    `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${entityId}` +
+    `?status=${newStatus}&access_token=${encodeURIComponent(token)}`
+  try {
+    const res = await fetch(url, { method: 'POST' })
+    const body = await res.json().catch(() => null)
+    if (!res.ok) {
+      return { ok: false, error: body?.error?.message || `HTTP ${res.status}` }
+    }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 // ---- Agregação em árvore campanha → conjunto → anúncio ----
